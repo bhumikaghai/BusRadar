@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>BusRadar - Active Journey</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Leaflet.js CSS for OpenStreetMap rendering -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Leaflet.js JavaScript -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#00327d",
+                    "primary-container": "#0047ab",
+                    "status-success": "#107100",
+                    "status-error": "#dc2626"
+                },
+                fontFamily: {
+                    sans: ["Inter", "sans-serif"]
+                }
+            }
+        }
+    }
+</script>
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f1f5f9;
+        margin: 0;
+        padding: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined[data-weight="fill"] {
+        font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .leaflet-container {
+        width: 100%;
+        height: 100%;
+        background: #e5e7eb;
+        font-family: 'Inter', sans-serif;
+    }
+    @keyframes amberGlow {
+        0%, 100% { background-color: rgba(251, 191, 36, 0.15); border-color: rgba(245, 158, 11, 0.9); }
+        50% { background-color: rgba(251, 191, 36, 0.3); border-color: rgba(217, 119, 6, 1); }
+    }
+    .incident-amber-alert {
+        animation: amberGlow 1.8s ease-in-out infinite;
+    }
+</style>
+</head>
+<body class="font-sans antialiased select-none">
+
+<!-- Fixed Native App Chassis -->
+<div class="max-w-md mx-auto h-[100dvh] max-h-[850px] bg-slate-50 flex flex-col relative overflow-hidden w-full shadow-2xl rounded-none md:rounded-3xl border border-slate-200">
+
+    <!-- 1. Top Navigation Bar (Standardized h-16) -->
+    <header class="bg-white/95 backdrop-blur-md px-4 py-3 flex justify-between items-center border-b border-slate-200 h-16 flex-shrink-0 z-30 shadow-xs">
+        <div class="flex items-center gap-2.5">
+            <button onclick="window.location.href='../search_booking_dashboard/code.html'" title="Back to Passenger Radar" class="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            </button>
+            <div>
+                <h1 data-i18n="app_title" class="text-slate-900 font-black text-base tracking-tight leading-tight">BusRadar</h1>
+                <span data-i18n="journey_title" class="text-[11px] font-bold text-primary block">Active Journey</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <!-- Language Toggle Button -->
+            <button id="btn-lang-toggle" class="bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-sm rounded-full px-3 py-1 text-sm font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[15px] text-primary">translate</span>
+                <span>🌐 EN / हि</span>
+            </button>
+            <!-- End Journey CTA -->
+            <button onclick="if(confirm('End active transit journey?')) window.location.href='../search_booking_dashboard/code.html';" title="End Journey" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-full px-2.5 py-1 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[14px]">logout</span>
+                <span data-i18n="journey_end_btn">End</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 2. Dynamic Amber Incident Alert Banner (Reactive to Driver Delay Broadcast) -->
+    <div id="amber-incident-banner" class="hidden incident-amber-alert border-b-2 px-4 py-2.5 z-40 flex items-center justify-between transition-all duration-300">
+        <div class="flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-amber-600 text-[22px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+            <div>
+                <div class="text-xs font-black text-amber-900 tracking-wide uppercase" id="incident-banner-title" data-i18n="pass_incident_title">TRANSIT DELAY REPORTED</div>
+                <div class="text-[11px] font-bold text-amber-800" id="incident-banner-desc">+5 min delay due to Heavy Traffic</div>
+            </div>
+        </div>
+        <span id="incident-badge-time" class="bg-amber-500 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded-full shadow-sm">
+            +5 MIN
+        </span>
+    </div>
+
+    <!-- 3. Main Content: Map Viewport (Top 40%) -->
+    <div class="relative w-full h-[40%] flex-shrink-0 bg-slate-200">
+        <!-- Leaflet Map Canvas -->
+        <div id="active-journey-map" class="w-full h-full z-10"></div>
+        
+        <!-- Floating Telemetry Pills -->
+        <div class="absolute top-3 left-3 right-3 z-20 flex justify-between pointer-events-none">
+            <div class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-2 pointer-events-auto">
+                <span class="w-2.5 h-2.5 rounded-full bg-status-success animate-ping"></span>
+                <span data-i18n="journey_status_active" class="text-xs text-status-success font-black tracking-wide">ON-BOARD GPS ACTIVE</span>
+            </div>
+            <div class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-1.5 pointer-events-auto">
+                <span class="material-symbols-outlined text-[16px] text-primary">speed</span>
+                <span data-i18n="journey_speed_label" class="text-[11px] font-bold text-slate-500">Speed:</span>
+                <span id="highway-speed" class="text-xs font-black text-slate-900 font-mono">52 km/h</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Bottom Drawer: Journey Details, Progress Track & Actions (Bottom 60%) -->
+    <div class="flex-1 bg-white rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] z-20 flex flex-col justify-between p-4 overflow-y-auto border-t border-slate-200">
+        
+        <div class="space-y-3">
+            <!-- Handle Indicator -->
+            <div class="w-12 h-1 bg-slate-300 rounded-full mx-auto -mt-1 mb-1"></div>
+
+            <!-- Active Status Ribbon with Bus ID and Distance Remaining -->
+            <div class="flex items-center justify-between">
+                <div class="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-status-success px-3 py-1 rounded-full text-xs font-black">
+                    <span class="w-2 h-2 rounded-full bg-status-success animate-pulse"></span>
+                    <span data-i18n="journey_live_badge">Live Journey Active</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono font-bold">
+                    <span class="text-slate-500 font-medium"><span data-i18n="journey_dist_label">Distance Remaining</span>: <b id="dist-remaining-val" class="text-slate-800">14.2 km</b></span>
+                    <span id="active-bus-plate" class="bg-blue-50 text-primary border border-blue-200 px-2 py-0.5 rounded-lg">HR-02-AB-1234</span>
+                </div>
+            </div>
+
+            <!-- Next Stop & Massive Live ETA -->
+            <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between shadow-xs">
+                <div>
+                    <span data-i18n="journey_next_stop_label" class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Next Stop</span>
+                    <h2 id="active-next-stop" data-i18n="stop_mmdu" class="text-base sm:text-lg font-black text-slate-900 leading-tight">MMDU Campus Gate</h2>
+                    <span id="active-schedule-pill" data-i18n="journey_on_time" class="inline-block mt-1 text-[11px] font-bold text-status-success bg-green-100/60 px-2 py-0.5 rounded-md">On Time</span>
+                </div>
+                <div class="text-right">
+                    <span data-i18n="journey_eta_title" class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Live ETA</span>
+                    <span id="active-eta-countdown" class="text-2xl sm:text-3xl font-extrabold text-primary font-mono tracking-tight">4m 30s</span>
+                </div>
+            </div>
+
+            <!-- NEW UX FEATURE 1: Visual Live Corridor Progress Bar -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs space-y-2">
+                <div class="flex justify-between items-center">
+                    <span data-i18n="journey_progress_label" class="text-xs font-bold text-slate-700">Corridor Progress</span>
+                    <span id="progress-percentage-text" class="text-xs font-black text-primary font-mono">65% Completed</span>
+                </div>
+                <!-- Track Bar -->
+                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
+                    <div id="progress-bar-fill" class="bg-primary h-full rounded-full transition-all duration-500 ease-out" style="width: 65%;"></div>
+                </div>
+                <!-- Micro Stop Points -->
+                <div class="flex justify-between text-[11px] font-bold text-slate-400 pt-0.5">
+                    <span data-i18n="stop_ynr" class="text-status-success font-extrabold">Yamuna Nagar ●</span>
+                    <span>Mustafabad ●</span>
+                    <span>Barara ●</span>
+                    <span data-i18n="stop_mmdu" class="text-primary font-extrabold">MMDU Campus Gate ●</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW UX FEATURES 2 & 3: Standardized Action Buttons (h-16) -->
+        <div class="flex flex-col gap-2.5 pt-3">
+            <!-- 1. Digital QR Ticket Pass CTA (h-16) -->
+            <button id="btn-view-qr" class="w-full h-16 bg-primary hover:bg-[#002561] text-white font-black text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg active:scale-95 transition-all cursor-pointer">
+                <span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">qr_code_2</span>
+                <span data-i18n="journey_view_ticket">View Digital Pass</span>
+            </button>
+
+            <!-- 2. Emergency SOS Share CTA (h-14) -->
+            <button id="btn-sos-share" class="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">shield</span>
+                <span data-i18n="journey_emergency_title">Emergency / SOS</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 1: High-Contrast Digital QR Transit Pass Card -->
+<!-- ======================================================== -->
+<div id="modal-qr-ticket" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-slate-200 relative flex flex-col items-center gap-3">
+        <button id="btn-close-qr" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center cursor-pointer">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+        
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[26px]" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+            <h3 data-i18n="journey_pass_title" class="font-black text-lg text-slate-900">BusRadar Transit Pass</h3>
+        </div>
+        
+        <span data-i18n="journey_pass_verified" class="bg-green-100 text-status-success px-3 py-1 rounded-full text-xs font-extrabold border border-green-300">
+            OFFLINE VERIFIABLE PASS
+        </span>
+        
+        <!-- Large QR Code Box -->
+        <div class="bg-slate-900 p-4 rounded-2xl border-2 border-slate-800 shadow-inner flex flex-col items-center justify-center">
+            <svg width="140" height="140" viewBox="0 0 100 100" fill="#ffffff">
+                <path d="M0 0h30v30H0zm5 5v20h20V5zm5 5h10v10H10zM70 0h30v30H70zm5 5v20h20V5zm5 5h10v10H80zM0 70h30v30H0zm5 5v20h20V75zm5 5h10v10H10zM40 10h10v10H40zm10 20h10v10H50zm-10 10h10v10H40zm20-20h10v10H60zm0 20h10v10H60zm-20 20h10v10H40zm10 10h10v10H50zm10-10h10v10H60zm10 10h10v10H70zm0 20h10v10H70zm20-20h10v10H90zm-10-10h10v10H80zm10 20h10v10H90zm-50 0h10v10H40zm0 10h10v10H40z"/>
+            </svg>
+            <span class="font-mono text-xs font-bold text-white mt-2">PNR: BR-2024-9841-SIH</span>
+        </div>
+
+        <!-- Verified Metadata Table -->
+        <div class="w-full bg-slate-50 rounded-2xl p-3.5 text-xs space-y-1.5 border border-slate-200">
+            <div class="flex justify-between"><span class="text-slate-500 font-medium">Bus Number:</span><span id="qr-bus-plate" class="font-mono font-bold text-primary">HR-02-AB-1234</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-medium">Route Corridor:</span><span id="qr-route-name" class="font-bold text-slate-900">Yamuna Nagar ➔ MMDU</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-medium">Fare Paid:</span><span class="font-black text-green-700">₹25.00 (UPI Verified)</span></div>
+            <div class="flex justify-between"><span class="text-slate-500 font-medium">Valid Till:</span><span class="font-bold text-slate-800">Today, 23:59 IST</span></div>
+        </div>
+
+        <button id="btn-done-qr" class="w-full h-14 bg-primary text-white font-extrabold rounded-2xl text-sm cursor-pointer shadow-md">Done</button>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL 2: Emergency SOS & Safety Broadcast Modal -->
+<!-- ======================================================== -->
+<div id="modal-sos-share" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-sm p-5 shadow-2xl border border-red-200 relative flex flex-col items-center gap-3">
+        <button id="btn-close-sos" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center cursor-pointer">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+        
+        <div class="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 animate-pulse">
+            <span class="material-symbols-outlined text-[32px]">shield</span>
+        </div>
+        
+        <h3 data-i18n="journey_sos_title" class="font-black text-lg text-slate-900 text-center">Live Journey Safety (SOS)</h3>
+        <p data-i18n="journey_sos_desc" class="text-xs text-slate-500 text-center">Share your verified live bus location and vehicle telemetry with family or authorities.</p>
+        
+        <div class="w-full bg-slate-50 rounded-2xl p-3 text-xs border border-slate-200">
+            <p id="sos-live-link" class="font-mono text-primary break-all font-bold">https://busradar.live/track/HR02AB1234?token=sih2024</p>
+        </div>
+
+        <button id="btn-copy-sos" class="w-full h-14 bg-orange-600 hover:bg-orange-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer">
+            <span class="material-symbols-outlined text-[20px]">content_copy</span>
+            <span id="sos-btn-text" data-i18n="journey_sos_copy">Copy Live Tracking Link</span>
+        </button>
+        
+        <button onclick="alert('🚨 Simulated WhatsApp alert dispatched to emergency contacts with verified GPS coordinates & vehicle plate HR-02-AB-1234!')" class="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-xs cursor-pointer shadow-xs">
+            <span class="material-symbols-outlined text-[18px]">chat</span>
+            <span data-i18n="journey_sos_wa">Dispatch via WhatsApp</span>
+        </button>
+
+        <button onclick="alert('📞 Calling Emergency Helpline 112...')" class="w-full h-12 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl flex items-center justify-center gap-2 text-xs cursor-pointer">
+            <span class="material-symbols-outlined text-[18px] text-red-600">call</span>
+            <span data-i18n="journey_sos_call">Emergency Helpline (112)</span>
+        </button>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- Leaflet & Full-Duplex Reactive Telemetry Engine -->
+<!-- ======================================================== -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Define Highway Route Waypoints from Yamuna Nagar to MMDU Campus
+    const highwayRoute = [
+        [30.1290, 77.2674], // Yamuna Nagar Bus Stand (Start)
+        [30.1435, 77.2880], // Jagadhri Bus Stand
+        [30.1650, 77.2600], // Kalanaur Chowk
+        [30.1900, 77.2100], // Mustafabad
+        [30.2200, 77.1300], // Barara Junction
+        [30.2450, 77.0650], // Mullana Town
+        [30.2520, 77.0470]  // MMDU Campus Gate (Destination)
+    ];
+
+    // 2. Initialize Leaflet Map
+    const map = L.map('active-journey-map', {
+        center: [30.1980, 77.1700],
+        zoom: 12,
+        zoomControl: false
+    });
+
+    // 3. Add OpenStreetMap Tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    setTimeout(() => map.invalidateSize(), 200);
+
+    // 4. Draw Highway Route Polyline
+    L.polyline(highwayRoute, {
+        color: '#0047ab',
+        weight: 6,
+        opacity: 0.85,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(map);
+
+    // 5. Add Key Highway Stop Markers
+    const stops = [
+        { name: "Yamuna Nagar Stand", coords: [30.1290, 77.2674] },
+        { name: "Jagadhri Stand", coords: [30.1435, 77.2880] },
+        { name: "Mustafabad", coords: [30.1900, 77.2100] },
+        { name: "Barara", coords: [30.2200, 77.1300] },
+        { name: "MMDU Campus (Next Stop)", coords: [30.2520, 77.0470] }
+    ];
+
+    stops.forEach((stop, index) => {
+        const isDestination = index === stops.length - 1;
+        const color = isDestination ? '#107100' : '#00327d';
+        const stopIconHtml = `
+            <div style="width: 14px; height: 14px; background: #ffffff; border: 3.5px solid ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
+        `;
+        L.marker(stop.coords, {
+            icon: L.divIcon({ html: stopIconHtml, iconSize: [14, 14], iconAnchor: [7, 7] })
+        }).addTo(map).bindPopup(`<b>Stop:</b> ${stop.name}`);
+    });
+
+    // 6. Custom "Passenger On-Board" Live Bus Marker
+    const activeBusIconHtml = `
+        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; width: 44px; height: 44px; background: rgba(16, 113, 0, 0.3); border-radius: 50%; animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="width: 38px; height: 38px; background: #107100; border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 4px 14px rgba(16, 113, 0, 0.5); display: flex; align-items: center; justify-content: center; color: white;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+                </svg>
+            </div>
+            <div style="position: absolute; top: -6px; right: -4px; background: #ffe16d; color: #221b00; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">YOU</div>
+        </div>
+    `;
+    const activeBusMarkerIcon = L.divIcon({
+        className: 'active-bus-icon',
+        html: activeBusIconHtml,
+        iconSize: [46, 46],
+        iconAnchor: [23, 23]
+    });
+
+    // 7. Micro-step interpolation along the route
+    function generateHighwaySteps(waypoints, stepsPerSegment = 12) {
+        const fullSteps = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const start = waypoints[i];
+            const end = waypoints[i + 1];
+            for (let s = 0; s < stepsPerSegment; s++) {
+                const fraction = s / stepsPerSegment;
+                const lat = start[0] + (end[0] - start[0]) * fraction;
+                const lng = start[1] + (end[1] - start[1]) * fraction;
+                fullSteps.push([lat, lng]);
+            }
+        }
+        fullSteps.push(waypoints[waypoints.length - 1]);
+        return fullSteps;
+    }
+
+    const journeySteps = generateHighwaySteps(highwayRoute, 12);
+    let currentStep = Math.floor(journeySteps.length * 0.55);
+
+    const busMarker = L.marker(journeySteps[currentStep], { icon: activeBusMarkerIcon }).addTo(map);
+
+    const countdownEl = document.getElementById('active-eta-countdown');
+    const speedEl = document.getElementById('highway-speed');
+    const distRemainingEl = document.getElementById('dist-remaining-val');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const progressText = document.getElementById('progress-percentage-text');
+    const busPlateEl = document.getElementById('active-bus-plate');
+    const nextStopEl = document.getElementById('active-next-stop');
+    const schedulePill = document.getElementById('active-schedule-pill');
+    const qrBusPlate = document.getElementById('qr-bus-plate');
+    const qrRouteName = document.getElementById('qr-route-name');
+    const incidentBanner = document.getElementById('amber-incident-banner');
+    const incidentBannerDesc = document.getElementById('incident-banner-desc');
+    const incidentBadgeTime = document.getElementById('incident-badge-time');
+
+    let activeDelayMinutes = 0;
+
+    function applyDelayAlert(busId, delayMinutes, reason) {
+        activeDelayMinutes = delayMinutes;
+        if (delayMinutes > 0) {
+            incidentBannerDesc.textContent = `+${delayMinutes} min delay due to ${reason} (Bus ${busId})`;
+            incidentBadgeTime.textContent = `+${delayMinutes} MIN`;
+            incidentBanner.classList.remove('hidden');
+            if (schedulePill) {
+                schedulePill.textContent = `Delay: +${delayMinutes}m`;
+                schedulePill.className = 'inline-block mt-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md';
+            }
+        } else {
+            incidentBanner.classList.add('hidden');
+            if (schedulePill) {
+                schedulePill.textContent = 'On Time';
+                schedulePill.className = 'inline-block mt-1 text-[11px] font-bold text-status-success bg-green-100/60 px-2 py-0.5 rounded-md';
+            }
+        }
+    }
+
+    // 8. WebSocket Telemetry Listener
+    function connectJourneyWebSocket() {
+        const WS_URL = 'ws://localhost:8000/ws/telemetry';
+        try {
+            const socket = new WebSocket(WS_URL);
+            socket.onmessage = function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.event_type === 'DRIVER_TELEMETRY') {
+                        if (data.lat && data.lng) {
+                            busMarker.setLatLng([data.lat, data.lng]);
+                        }
+                        if (data.speed_kmh && speedEl) {
+                            speedEl.textContent = `${data.speed_kmh} km/h`;
+                        }
+                        if (data.bus_id) {
+                            if (busPlateEl) busPlateEl.textContent = data.bus_id;
+                            if (qrBusPlate) qrBusPlate.textContent = data.bus_id;
+                        }
+                        if (data.route_to && nextStopEl) {
+                            nextStopEl.textContent = data.route_to;
+                        }
+                    } else if (data.event_type === 'DRIVER_DELAY') {
+                        applyDelayAlert(data.bus_id || 'HR-02-AB-1234', data.delay_minutes, data.reason);
+                    }
+                } catch (e) {}
+            };
+            socket.onclose = () => setTimeout(connectJourneyWebSocket, 3000);
+        } catch (e) {}
+    }
+
+    connectJourneyWebSocket();
+
+    // 9. Real-Time Journey Animation & Progress Bar Calculation
+    setInterval(() => {
+        currentStep = (currentStep + 1) % journeySteps.length;
+        const coord = journeySteps[currentStep];
+        busMarker.setLatLng(coord);
+
+        // Progress Calculation
+        const progressPct = Math.round((currentStep / (journeySteps.length - 1)) * 100);
+        if (progressBarFill) progressBarFill.style.width = `${progressPct}%`;
+        if (progressText) progressText.textContent = `${progressPct}% Completed`;
+
+        // Remaining distance calculation (Total corridor: 32 km)
+        const kmRemaining = Math.max(0.5, ((1 - (currentStep / (journeySteps.length - 1))) * 32)).toFixed(1);
+        if (distRemainingEl) distRemainingEl.textContent = `${kmRemaining} km`;
+
+        // Dynamic countdown to destination MMDU
+        const remainingSteps = journeySteps.length - currentStep;
+        const totalSecondsLeft = Math.max(30, remainingSteps * 6 + (activeDelayMinutes * 60));
+        const minsLeft = Math.floor(totalSecondsLeft / 60);
+        const secsLeft = totalSecondsLeft % 60;
+        if (countdownEl) {
+            countdownEl.textContent = `${minsLeft}m ${secsLeft < 10 ? '0' : ''}${secsLeft}s`;
+        }
+
+        // Realistic highway speed variation
+        const currentSpeed = Math.floor(50 + Math.sin(currentStep) * 6);
+        if (speedEl) speedEl.textContent = `${currentSpeed} km/h`;
+    }, 2000);
+
+    // 10. Interactive Modals Wiring
+    const qrModal = document.getElementById('modal-qr-ticket');
+    const sosModal = document.getElementById('modal-sos-share');
+
+    document.getElementById('btn-view-qr').addEventListener('click', () => qrModal.classList.remove('hidden'));
+    document.getElementById('btn-close-qr').addEventListener('click', () => qrModal.classList.add('hidden'));
+    document.getElementById('btn-done-qr').addEventListener('click', () => qrModal.classList.add('hidden'));
+
+    document.getElementById('btn-sos-share').addEventListener('click', () => sosModal.classList.remove('hidden'));
+    document.getElementById('btn-close-sos').addEventListener('click', () => sosModal.classList.add('hidden'));
+
+    document.getElementById('btn-copy-sos').addEventListener('click', () => {
+        const text = document.getElementById('sos-live-link').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const btnText = document.getElementById('sos-btn-text');
+            btnText.textContent = 'Link Copied to Clipboard!';
+            setTimeout(() => { btnText.textContent = 'Copy Live Tracking Link'; }, 2500);
+        });
+    });
+});
+</script>
+<!-- Universal i18n Engine Script -->
+<script src="../i18n.js"></script>
+</body>
+</html>

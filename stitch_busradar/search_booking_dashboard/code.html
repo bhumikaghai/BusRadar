@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>BusRadar - Live Map, Passenger Radar & Incident Alerts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Leaflet.js CSS for OpenStreetMap rendering -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Leaflet.js JavaScript -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Fuse.js CDN for Fuzzy Autocomplete Search -->
+<script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#00327d",
+                    "primary-container": "#0047ab",
+                    "status-success": "#107100"
+                },
+                fontFamily: {
+                    sans: ["Inter", "sans-serif"]
+                }
+            }
+        }
+    }
+</script>
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f1f5f9;
+        margin: 0;
+        padding: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined[data-weight="fill"] {
+        font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .leaflet-container {
+        width: 100%;
+        height: 100%;
+        background: #e5e7eb;
+        font-family: 'Inter', sans-serif;
+    }
+    .bus-marker-pulse {
+        animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 71, 171, 0.6); }
+        70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(0, 71, 171, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 71, 171, 0); }
+    }
+    @keyframes amberGlow {
+        0%, 100% { background-color: rgba(251, 191, 36, 0.15); border-color: rgba(245, 158, 11, 0.9); }
+        50% { background-color: rgba(251, 191, 36, 0.3); border-color: rgba(217, 119, 6, 1); }
+    }
+    .incident-amber-alert {
+        animation: amberGlow 1.8s ease-in-out infinite;
+    }
+</style>
+</head>
+<body class="font-sans antialiased select-none">
+
+<!-- Fixed Native App Chassis -->
+<div class="max-w-md mx-auto h-[100dvh] max-h-[850px] bg-white flex flex-col relative overflow-hidden w-full shadow-2xl rounded-none md:rounded-3xl border border-slate-200">
+
+<!-- Dynamic Amber Incident Alert Banner -->
+<div id="amber-incident-banner" class="hidden incident-amber-alert border-b-2 px-4 py-3 z-40 flex items-center justify-between transition-all duration-300">
+    <div class="flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-amber-600 text-[24px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+        <div>
+            <div class="text-xs font-black text-amber-900 tracking-wide uppercase" id="incident-banner-title" data-i18n="pass_incident_title">TRANSIT DELAY REPORTED</div>
+            <div class="text-[11px] font-bold text-amber-800" id="incident-banner-desc">+5 min delay due to Heavy Traffic</div>
+        </div>
+    </div>
+    <span id="incident-badge-time" class="bg-amber-500 text-black font-mono font-black text-xs px-2.5 py-1 rounded-full shadow-sm">
+        +5 MIN
+    </span>
+</div>
+
+<!-- Header / Search Layer (Z-Index 30) -->
+<div class="absolute top-0 left-0 w-full p-3.5 z-30 pointer-events-none" id="header-search-layer">
+<div class="bg-white/95 backdrop-blur-md rounded-3xl p-3.5 shadow-lg border border-slate-200 pointer-events-auto transition-all space-y-2.5">
+    <!-- Top Status Ribbon -->
+    <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2">
+            <button onclick="window.location.href='../onboarding_entry/code.html'" class="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer" title="Back to Onboarding">
+                <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            </button>
+            <div class="flex items-center gap-1.5">
+                <div id="telemetry-ws-dot" class="w-2.5 h-2.5 rounded-full bg-status-success animate-ping"></div>
+                <span id="telemetry-mode-label" data-i18n="pass_ws_live" class="text-xs font-black text-status-success tracking-wide uppercase">WEBSOCKET: LIVE</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="btn-lang-toggle" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
+                <span class="material-symbols-outlined text-[15px] text-primary">translate</span>
+                <span>हिन्दी</span>
+            </button>
+            <div class="flex items-center gap-1 bg-slate-100 px-2.5 py-1.5 rounded-xl text-xs font-black text-primary">
+                <span class="material-symbols-outlined text-[16px]">speed</span>
+                <span id="live-speed-readout">42 km/h</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dual Autocomplete Combobox Inputs -->
+    <div class="flex flex-col gap-2">
+        <!-- 1. FROM (Origin) Combobox (h-12) -->
+        <div class="relative">
+            <div class="flex items-center bg-white border border-slate-300 rounded-2xl px-3.5 py-2 shadow-xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all h-12">
+                <span class="material-symbols-outlined text-green-600 mr-2 text-[20px]">trip_origin</span>
+                <input id="from-search-input" data-i18n-ph="pass_from_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-0 focus:outline-none" placeholder="From: Yamuna Nagar Bus Stand..." type="text" value="Yamuna Nagar Bus Stand"/>
+                <button id="btn-clear-from" class="text-slate-400 hover:text-slate-700 cursor-pointer flex items-center">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+            <!-- Dropdown -->
+            <ul id="from-autocomplete-dropdown" class="hidden absolute z-50 w-full bg-white max-h-52 overflow-y-auto rounded-2xl border border-slate-200 shadow-xl mt-1 divide-y divide-slate-100"></ul>
+        </div>
+
+        <!-- 2. TO (Destination) Combobox (h-12) -->
+        <div class="relative">
+            <div class="flex items-center bg-white border border-slate-300 rounded-2xl px-3.5 py-2 shadow-xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all h-12">
+                <span class="material-symbols-outlined text-red-600 mr-2 text-[20px]">location_on</span>
+                <input id="to-search-input" data-i18n-ph="pass_to_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-0 focus:outline-none" placeholder="To: MMDU Campus Gate, Ambala..." type="text" value="MMDU Campus Gate"/>
+                <button id="btn-clear-to" class="text-slate-400 hover:text-slate-700 cursor-pointer flex items-center">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+            <!-- Dropdown -->
+            <ul id="to-autocomplete-dropdown" class="hidden absolute z-50 w-full bg-white max-h-52 overflow-y-auto rounded-2xl border border-slate-200 shadow-xl mt-1 divide-y divide-slate-100"></ul>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Map Viewport -->
+<div class="relative flex-1 w-full z-10" id="map-viewport">
+<div class="w-full h-full" id="passenger-live-map"></div>
+</div>
+
+<!-- Bottom Floating Route & Booking Drawer (Z-Index 20) -->
+<div class="bg-white/95 backdrop-blur-md border-t border-slate-200 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] p-4.5 z-20 flex flex-col gap-3.5">
+<!-- Handle Indicator -->
+<div class="w-12 h-1 bg-slate-300 rounded-full self-center mb-0.5"></div>
+
+<!-- Route & Live Bus Telemetry Card -->
+<div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-primary shadow-xs">
+            <span class="material-symbols-outlined text-[24px]">directions_bus</span>
+        </div>
+        <div>
+            <div class="flex items-center gap-2">
+                <span id="live-route-title" data-i18n="pass_route_title" class="text-sm sm:text-base font-extrabold text-slate-900">Route 104 Express</span>
+                <span id="live-bus-plate" class="text-xs font-mono font-bold bg-blue-100 text-primary px-2 py-0.5 rounded-lg">HR-02-AB-1234</span>
+            </div>
+            <div class="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <span id="live-route-origin">Yamuna Nagar Bus Stand</span>
+                <span>➔</span>
+                <span id="live-route-dest">MMDU Campus Gate</span>
+            </div>
+        </div>
+    </div>
+    <div class="text-right">
+        <div id="dynamic-eta-text" data-i18n="pass_eta_live" class="text-base sm:text-lg font-black text-primary">Live ETA: 12 mins</div>
+        <div id="dynamic-traffic-pill" data-i18n="pass_traffic_optimal" class="text-xs font-bold text-status-success uppercase">Optimal Traffic</div>
+    </div>
+</div>
+
+<!-- Schedule & Fare Summary Surface -->
+<div class="bg-slate-100 rounded-2xl p-3 flex items-center justify-between text-xs sm:text-sm border border-slate-200">
+    <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-slate-500 text-[18px]">schedule</span>
+        <span class="text-slate-600 font-medium">Dep: <b id="live-dep-time" class="text-slate-900 font-mono font-bold">08:30 AM</b> &bull; Arr: <b id="live-arr-time" class="text-slate-900 font-mono font-bold">09:15 AM</b></span>
+    </div>
+    <div class="font-extrabold text-slate-900 text-base">₹25</div>
+</div>
+
+<!-- Primary Action: Standardized h-16 UPI Booking Pass Trigger -->
+<button id="btn-open-upi-modal" class="w-full bg-primary hover:bg-[#002561] text-white font-extrabold text-base rounded-2xl h-16 flex items-center justify-center gap-2.5 hover:shadow-lg active:scale-95 transition-all shadow-md cursor-pointer">
+    <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
+    <span data-i18n="pass_buy_btn">Buy Ticket (UPI Pass)</span>
+</button>
+</div>
+
+<!-- Interactive UPI Pass Modal -->
+<div id="modal-upi-pass" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col gap-4 border border-slate-200">
+        <div class="flex items-center justify-between border-b pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-primary text-[24px]">payments</span>
+                <h3 data-i18n="upi_title" class="font-bold text-lg text-slate-900">Bharat UPI Instant Pass</h3>
+            </div>
+            <button id="btn-close-upi" class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]">close</span>
+            </button>
+        </div>
+
+        <!-- Dynamic Pass Summary -->
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-2">
+            <div class="flex justify-between items-center text-xs sm:text-sm">
+                <span data-i18n="upi_corridor_label" class="text-slate-500 font-medium">Transit Corridor:</span>
+                <span class="font-bold text-slate-800" id="upi-modal-route">Yamuna Nagar ➔ MMDU Campus</span>
+            </div>
+            <div class="flex justify-between items-center text-xs sm:text-sm">
+                <span data-i18n="upi_veh_label" class="text-slate-500 font-medium">Vehicle ID:</span>
+                <span class="font-mono font-bold text-primary" id="upi-modal-plate">HR-02-AB-1234</span>
+            </div>
+            <div class="flex justify-between items-center text-xs sm:text-sm">
+                <span data-i18n="upi_pnr_label" class="text-slate-500 font-medium">Generated PNR:</span>
+                <span class="font-mono font-bold text-slate-900" id="upi-modal-pnr">PNR-BR-781924</span>
+            </div>
+            <div class="flex justify-between items-center text-sm sm:text-base font-bold pt-2 border-t border-slate-200">
+                <span data-i18n="upi_fare_label">Fare Amount:</span>
+                <span class="text-green-700 font-black text-lg">₹25.00</span>
+            </div>
+        </div>
+
+        <!-- Simulated UPI Dynamic QR -->
+        <div id="upi-qr-container" class="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <div class="w-40 h-40 bg-slate-900 rounded-2xl p-3 flex items-center justify-center relative shadow-inner">
+                <!-- SVG Vector QR Code -->
+                <svg viewBox="0 0 100 100" class="w-full h-full text-white fill-current">
+                    <path d="M10 10h30v30h-30zM15 15v20h20v-20zM22 22h6v6h-6zM60 10h30v30h-30zM65 15v20h20v-20zM72 22h6v6h-6zM10 60h30v30h-30zM15 65v20h20v-20zM22 72h6v6h-6zM45 10h10v10h-10zM45 25h10v20h-10zM10 45h20v10h-20zM60 45h10v15h-10zM75 45h15v10h-15zM45 60h15v10h-15zM45 75h10v15h-10zM60 70h10v10h-10zM75 65h15v25h-15zM60 85h10v5h-10z"/>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span class="bg-white px-2 py-0.5 rounded text-[9px] font-black text-primary border border-slate-300">UPI</span>
+                </div>
+            </div>
+            <span data-i18n="upi_scan_hint" class="text-xs font-mono text-slate-500 mt-2 font-medium">Scan with GPay, PhonePe, or Paytm</span>
+        </div>
+
+        <!-- Payment Verification Trigger (h-16) -->
+        <div id="upi-action-container">
+            <button id="btn-simulate-upi-pay" class="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-extrabold rounded-2xl text-base flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md cursor-pointer">
+                <span class="material-symbols-outlined text-[22px]">verified_user</span>
+                <span data-i18n="upi_pay_btn">Simulate UPI Payment (Instant Pay)</span>
+            </button>
+        </div>
+
+        <!-- Verification Success Screen -->
+        <div id="upi-success-view" class="hidden flex-col items-center justify-center py-4 space-y-3">
+            <div class="w-16 h-16 rounded-full bg-green-100 border-2 border-green-500 flex items-center justify-center text-green-600 animate-bounce">
+                <span class="material-symbols-outlined text-[36px]">check_circle</span>
+            </div>
+            <div class="text-center">
+                <h4 data-i18n="upi_success_title" class="font-black text-lg text-slate-900">Payment Verified!</h4>
+                <p data-i18n="upi_success_desc" class="text-xs sm:text-sm text-slate-600 font-medium">Digital Pass Issued to MMDU Mullana</p>
+            </div>
+            <button onclick="window.location.href='../active_journey_dashboard/code.html'" class="w-full h-14 bg-primary text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md hover:bg-primary-container">
+                <span data-i18n="upi_open_journey">Open Digital Pass in Active Journey</span>
+                <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </button>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Leaflet Map & Full-Duplex Reactive Telemetry Engine -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const transitLocations = [
+        { id: "ynr_stand", name: "Yamuna Nagar Bus Stand", subtitle: "Yamuna Nagar District", type: "City Hub", icon: "🏢" },
+        { id: "ynr_jag", name: "Jagadhri Bus Stand", subtitle: "Yamuna Nagar District", type: "City Hub", icon: "🏢" },
+        { id: "ynr_rad", name: "Radaur Bus Stand", subtitle: "Yamuna Nagar Route", type: "Town Hub", icon: "🏢" },
+        { id: "ynr_tc", name: "Thana Chappar", subtitle: "NH-344 Highway Stop", type: "Local Stop", icon: "🚏" },
+        { id: "ynr_mus", name: "Mustafabad (Saraswati Nagar)", subtitle: "Town Stop", type: "Local Stop", icon: "🚏" },
+        { id: "ynr_bar", name: "Barara Bus Stand", subtitle: "Ambala District", type: "Town Hub", icon: "🚆" },
+        { id: "ynr_mul", name: "Mullana Bus Stand", subtitle: "Ambala District", type: "Local Stop", icon: "🚏" },
+        { id: "ynr_mmdu", name: "MMDU Campus Gate", subtitle: "Mullana University Hub", type: "University Hub", icon: "🎓" },
+        { id: "hr_amb_c", name: "Ambala Cantt ISBT", subtitle: "Major Transit Hub", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_amb_cty", name: "Ambala City Bus Stand", subtitle: "Ambala District", type: "City Hub", icon: "🏢" },
+        { id: "hr_nry", name: "Naraingarh Bus Stand", subtitle: "Ambala District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_kkr_p", name: "Kurukshetra (Pipli)", subtitle: "GT Road NH-44", type: "Intercity Route", icon: "🛣️" },
+        { id: "hr_kkr_n", name: "Kurukshetra New Bus Stand", subtitle: "Sector 10, KKR", type: "City Hub", icon: "🏢" },
+        { id: "hr_peo", name: "Pehowa Bus Stand", subtitle: "Kurukshetra District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_sha", name: "Shahabad Markanda", subtitle: "GT Road NH-44", type: "Town Hub", icon: "🛣️" },
+        { id: "hr_lad", name: "Ladwa Bus Stand", subtitle: "Kurukshetra District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_kar", name: "Karnal ISBT", subtitle: "GT Road NH-44", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_ghr", name: "Gharaunda", subtitle: "Karnal District", type: "Town Hub", icon: "🛣️" },
+        { id: "hr_ass", name: "Assandh Bus Stand", subtitle: "Karnal District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_pan", name: "Panipat ISBT", subtitle: "GT Road NH-44", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_sam", name: "Samalkha", subtitle: "Panipat District", type: "Town Hub", icon: "🛣️" },
+        { id: "hr_son", name: "Sonipat Bus Stand", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_goh", name: "Gohana Bus Stand", subtitle: "Sonipat District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_mur", name: "Murthal", subtitle: "GT Road NH-44", type: "Highway Stop", icon: "🛣️" },
+        { id: "hr_roh", name: "Rohtak New Bus Stand", subtitle: "Rohtak District", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_meh", name: "Meham Bus Stand", subtitle: "Rohtak District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_his", name: "Hisar ISBT", subtitle: "Hisar District", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_han", name: "Hansi Bus Stand", subtitle: "Hisar District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_sir", name: "Sirsa Bus Stand", subtitle: "Sirsa District", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_fat", name: "Fatehabad Bus Stand", subtitle: "Fatehabad District", type: "City Hub", icon: "🏢" },
+        { id: "hr_toh", name: "Tohana Bus Stand", subtitle: "Fatehabad District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_jin", name: "Jind Bus Stand", subtitle: "Jind District", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_nar", name: "Narwana Bus Stand", subtitle: "Jind District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_saf", name: "Safidon Bus Stand", subtitle: "Jind District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_kai", name: "Kaithal Bus Stand", subtitle: "Kaithal District", type: "City Hub", icon: "🏢" },
+        { id: "hr_kal", name: "Kalayat Bus Stand", subtitle: "Kaithal District", type: "Town Hub", icon: "🏢" },
+        { id: "hr_gur_14", name: "Gurugram Sector 14", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_gur_iff", name: "IFFCO Chowk", subtitle: "Gurugram Highway", type: "Intercity Route", icon: "🛣️" },
+        { id: "hr_far_nit", name: "Faridabad NIT Bus Stand", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_bal", name: "Ballabhgarh Bus Stand", subtitle: "Faridabad District", type: "Major ISBT", icon: "🏢" },
+        { id: "hr_pal", name: "Palwal Bus Stand", subtitle: "Palwal District", type: "City Hub", icon: "🏢" },
+        { id: "hr_rew", name: "Rewari Bus Stand", subtitle: "Rewari District", type: "City Hub", icon: "🏢" },
+        { id: "hr_bhi", name: "Bhiwani Bus Stand", subtitle: "Bhiwani District", type: "City Hub", icon: "🏢" },
+        { id: "hr_dad", name: "Charkhi Dadri", subtitle: "Charkhi Dadri District", type: "City Hub", icon: "🏢" },
+        { id: "hr_jha", name: "Jhajjar Bus Stand", subtitle: "Jhajjar District", type: "City Hub", icon: "🏢" },
+        { id: "hr_bah", name: "Bahadurgarh Bus Stand", subtitle: "Jhajjar District", type: "City Hub", icon: "🏢" },
+        { id: "hr_nuh", name: "Nuh Bus Stand", subtitle: "Mewat Region", type: "City Hub", icon: "🏢" },
+        { id: "hr_mah", name: "Mahendragarh Bus Stand", subtitle: "Mahendragarh District", type: "City Hub", icon: "🏢" },
+        { id: "hr_nrl", name: "Narnaul Bus Stand", subtitle: "Mahendragarh District", type: "City Hub", icon: "🏢" },
+        { id: "hr_pch", name: "Panchkula Sector 5", subtitle: "Tricity Region", type: "City Hub", icon: "🏢" },
+        { id: "hr_kal_p", name: "Kalka Bus Stand", subtitle: "Panchkula District", type: "City Hub", icon: "🏢" },
+        { id: "chd_43", name: "Chandigarh Sector 43", subtitle: "Tricity Gateway", type: "Major ISBT", icon: "🏢" }
+    ];
+
+    const routeWaypoints = [
+        [30.1290, 77.2674],
+        [30.1435, 77.2880],
+        [30.1650, 77.2600],
+        [30.1900, 77.2100],
+        [30.2200, 77.1300],
+        [30.2450, 77.0650],
+        [30.2520, 77.0470]
+    ];
+
+    const USER_WAITING_STOP = [30.2520, 77.0470];
+
+    const map = L.map('passenger-live-map', {
+        center: [30.1800, 77.1500],
+        zoom: 12,
+        zoomControl: false
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    setTimeout(() => map.invalidateSize(), 250);
+
+    L.polyline(routeWaypoints, {
+        color: '#0047ab',
+        weight: 6,
+        opacity: 0.85,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(map);
+
+    const stops = [
+        { name: "Yamuna Nagar Bus Stand", coords: [30.1290, 77.2674] },
+        { name: "Jagadhri Bus Stand", coords: [30.1435, 77.2880] },
+        { name: "Mustafabad Hub", coords: [30.1900, 77.2100] },
+        { name: "Barara Junction", coords: [30.2200, 77.1300] },
+        { name: "MMDU Campus Gate", coords: [30.2520, 77.0470] }
+    ];
+
+    stops.forEach((stop, idx) => {
+        const isDest = idx === stops.length - 1;
+        const color = isDest ? '#106e00' : '#00327d';
+        const stopHtml = `<div style="width: 16px; height: 16px; background: #ffffff; border: 4px solid ${color}; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.35);"></div>`;
+        L.marker(stop.coords, {
+            icon: L.divIcon({ html: stopHtml, iconSize: [16, 16], iconAnchor: [8, 8] })
+        }).addTo(map).bindPopup(`<b>Stop:</b> ${stop.name}`);
+    });
+
+    const busMarkerHtml = `
+        <div class="bus-marker-pulse" style="width: 42px; height: 42px; background: #0047ab; border: 3px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 14px rgba(0,71,171,0.5);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+            </svg>
+        </div>
+    `;
+    const busMarkerIcon = L.divIcon({
+        className: 'bus-custom-marker',
+        html: busMarkerHtml,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21]
+    });
+
+    let busMarker = L.marker(routeWaypoints[0], { icon: busMarkerIcon }).addTo(map);
+
+    const livePlateEl = document.getElementById('live-bus-plate');
+    const liveOriginEl = document.getElementById('live-route-origin');
+    const liveDestEl = document.getElementById('live-route-dest');
+    const liveDepEl = document.getElementById('live-dep-time');
+    const liveArrEl = document.getElementById('live-arr-time');
+    const liveSpeedEl = document.getElementById('live-speed-readout');
+    const dynamicEtaEl = document.getElementById('dynamic-eta-text');
+    const dynamicTrafficEl = document.getElementById('dynamic-traffic-pill');
+    const telemetryModeLabel = document.getElementById('telemetry-mode-label');
+    const telemetryDot = document.getElementById('telemetry-ws-dot');
+
+    const incidentBanner = document.getElementById('amber-incident-banner');
+    const incidentBannerDesc = document.getElementById('incident-banner-desc');
+    const incidentBadgeTime = document.getElementById('incident-badge-time');
+
+    let activeDelayMinutes = 0;
+    let lastCalculatedBaseEta = 12;
+    let isWsLive = false;
+
+    function calculateEtaMinutes(lat1, lon1, lat2, lon2, speedKmh = 40) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distanceKm = R * c;
+        const safeSpeed = Math.max(20, speedKmh);
+        return Math.max(1, Math.round((distanceKm / safeSpeed) * 60));
+    }
+
+    function updateEtaUI() {
+        const totalEta = lastCalculatedBaseEta + activeDelayMinutes;
+        if (activeDelayMinutes > 0) {
+            dynamicEtaEl.textContent = `Live ETA: ${totalEta} mins (+${activeDelayMinutes}m delay)`;
+            dynamicEtaEl.className = 'text-base sm:text-lg font-black text-amber-600';
+            dynamicTrafficEl.textContent = `Delayed by ${activeDelayMinutes} mins`;
+            dynamicTrafficEl.className = 'text-xs font-bold text-amber-600 uppercase';
+        } else {
+            dynamicEtaEl.textContent = `Live ETA: ${totalEta} mins`;
+            dynamicEtaEl.className = 'text-base sm:text-lg font-black text-primary';
+            dynamicTrafficEl.textContent = 'Optimal Traffic (On Time)';
+            dynamicTrafficEl.className = 'text-xs font-bold text-status-success uppercase';
+        }
+    }
+
+    function applyDelayAlert(busId, delayMinutes, reason) {
+        activeDelayMinutes = delayMinutes;
+        if (delayMinutes > 0) {
+            incidentBannerDesc.textContent = `+${delayMinutes} min delay due to ${reason} (Bus ${busId})`;
+            incidentBadgeTime.textContent = `+${delayMinutes} MIN`;
+            incidentBanner.classList.remove('hidden');
+        } else {
+            incidentBanner.classList.add('hidden');
+        }
+        updateEtaUI();
+    }
+
+    function connectPassengerWebSocket() {
+        const WS_URL = 'ws://localhost:8000/ws/telemetry';
+        try {
+            const socket = new WebSocket(WS_URL);
+
+            socket.onopen = function () {
+                isWsLive = true;
+                if (telemetryModeLabel) telemetryModeLabel.textContent = 'WEBSOCKET: LIVE';
+                if (telemetryDot) telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
+            };
+
+            socket.onmessage = function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.event_type === 'DRIVER_TELEMETRY' && data.lat && data.lng) {
+                        const newPos = [data.lat, data.lng];
+                        busMarker.setLatLng(newPos);
+
+                        if (liveSpeedEl && data.speed_kmh) {
+                            liveSpeedEl.textContent = `${data.speed_kmh} km/h`;
+                        }
+
+                        if (data.bus_id && livePlateEl) livePlateEl.textContent = data.bus_id;
+                        if (data.route_from && liveOriginEl) liveOriginEl.textContent = data.route_from;
+                        if (data.route_to && liveDestEl) liveDestEl.textContent = data.route_to;
+                        if (data.departure_time && liveDepEl) liveDepEl.textContent = data.departure_time;
+                        if (data.arrival_time && liveArrEl) liveArrEl.textContent = data.arrival_time;
+
+                        lastCalculatedBaseEta = calculateEtaMinutes(data.lat, data.lng, USER_WAITING_STOP[0], USER_WAITING_STOP[1], data.speed_kmh);
+                        updateEtaUI();
+                    }
+                    else if (data.event_type === 'DRIVER_DELAY') {
+                        applyDelayAlert(data.bus_id || 'HR-02-AB-1234', data.delay_minutes, data.reason);
+                    }
+                    else if (data.event_type === 'CONNECTION_ESTABLISHED' && data.fleet_snapshot && data.fleet_snapshot.length > 0) {
+                        const busInfo = data.fleet_snapshot[0];
+                        if (busInfo) {
+                            if (busInfo.bus_id && livePlateEl) livePlateEl.textContent = busInfo.bus_id;
+                            if (busInfo.route_from && liveOriginEl) liveOriginEl.textContent = busInfo.route_from;
+                            if (busInfo.route_to && liveDestEl) liveDestEl.textContent = busInfo.route_to;
+                            if (busInfo.delay_minutes > 0) {
+                                applyDelayAlert(busInfo.bus_id, busInfo.delay_minutes, busInfo.delay_reason);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error parsing telemetry frame:', e);
+                }
+            };
+
+            socket.onerror = function () {
+                isWsLive = false;
+                if (telemetryModeLabel) telemetryModeLabel.textContent = 'LOCAL RADAR SIM';
+            };
+
+            socket.onclose = function () {
+                isWsLive = false;
+                if (telemetryModeLabel) telemetryModeLabel.textContent = 'RECONNECTING WS';
+                setTimeout(connectPassengerWebSocket, 3000);
+            };
+        } catch (err) {
+            console.warn('WebSocket connect error:', err);
+        }
+    }
+
+    connectPassengerWebSocket();
+
+    let simIndex = 0;
+    setInterval(() => {
+        if (!isWsLive) {
+            simIndex = (simIndex + 1) % routeWaypoints.length;
+            const coord = routeWaypoints[simIndex];
+            busMarker.setLatLng(coord);
+
+            const remainingFraction = 1 - (simIndex / routeWaypoints.length);
+            lastCalculatedBaseEta = Math.max(1, Math.round(remainingFraction * 12));
+            updateEtaUI();
+
+            const speed = Math.floor(36 + Math.sin(simIndex) * 6);
+            if (liveSpeedEl) liveSpeedEl.textContent = `${speed} km/h`;
+        }
+    }, 2000);
+
+    // UPI Modal Flow
+    const upiModal = document.getElementById('modal-upi-pass');
+    const openUpiBtn = document.getElementById('btn-open-upi-modal');
+    const closeUpiBtn = document.getElementById('btn-close-upi');
+    const simulatePayBtn = document.getElementById('btn-simulate-upi-pay');
+    const upiActionContainer = document.getElementById('upi-action-container');
+    const upiQrContainer = document.getElementById('upi-qr-container');
+    const upiSuccessView = document.getElementById('upi-success-view');
+    const upiRouteEl = document.getElementById('upi-modal-route');
+    const upiPlateEl = document.getElementById('upi-modal-plate');
+    const upiPnrEl = document.getElementById('upi-modal-pnr');
+
+    openUpiBtn.addEventListener('click', () => {
+        if (livePlateEl && upiPlateEl) upiPlateEl.textContent = livePlateEl.textContent;
+        if (liveOriginEl && liveDestEl && upiRouteEl) {
+            upiRouteEl.textContent = `${liveOriginEl.textContent} ➔ ${liveDestEl.textContent}`;
+        }
+        
+        const randomPnr = 'PNR-BR-' + Math.floor(100000 + Math.random() * 900000);
+        if (upiPnrEl) upiPnrEl.textContent = randomPnr;
+
+        upiQrContainer.classList.remove('hidden');
+        upiActionContainer.classList.remove('hidden');
+        upiSuccessView.classList.add('hidden');
+        upiModal.classList.remove('hidden');
+    });
+
+    closeUpiBtn.addEventListener('click', () => {
+        upiModal.classList.add('hidden');
+    });
+
+    simulatePayBtn.addEventListener('click', function () {
+        this.disabled = true;
+        this.innerHTML = `
+            <span class="material-symbols-outlined text-[20px] animate-spin">sync</span>
+            <span>Verifying via UPI Switch...</span>
+        `;
+
+        setTimeout(() => {
+            upiQrContainer.classList.add('hidden');
+            upiActionContainer.classList.add('hidden');
+            upiSuccessView.classList.remove('hidden');
+            this.disabled = false;
+            this.innerHTML = `
+                <span class="material-symbols-outlined text-[20px]">verified_user</span>
+                <span data-i18n="upi_pay_btn">Simulate UPI Payment (Instant Pay)</span>
+            `;
+        }, 1200);
+    });
+
+    // Fuse.js Autocomplete (Enhanced Spacing)
+    const fuse = new Fuse(transitLocations, {
+        keys: ['name', 'subtitle', 'type'],
+        threshold: 0.35,
+        distance: 100,
+        minMatchCharLength: 1
+    });
+
+    function setupPassengerCombobox(inputId, clearBtnId, dropdownId, onSelect) {
+        const input = document.getElementById(inputId);
+        const clearBtn = document.getElementById(clearBtnId);
+        const dropdown = document.getElementById(dropdownId);
+
+        function renderResults(results) {
+            if (!results.length) {
+                dropdown.innerHTML = `
+                    <li class="px-4 py-3.5 text-xs text-slate-500 text-center flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">search_off</span>
+                        <span>No transit stop found in Haryana DB.</span>
+                    </li>
+                `;
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = results.map(({ item }) => `
+                <li class="combobox-item flex flex-col w-full p-3.5 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors" data-name="${item.name}">
+                    <div class="font-bold text-slate-900 text-xs sm:text-sm truncate">${item.name}</div>
+                    <div class="text-slate-500 text-[11px] mt-0.5 truncate font-medium">${item.subtitle}</div>
+                </li>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+
+            dropdown.querySelectorAll('.combobox-item').forEach(el => {
+                el.addEventListener('click', function () {
+                    const selectedName = this.getAttribute('data-name');
+                    input.value = selectedName;
+                    dropdown.classList.add('hidden');
+                    clearBtn.classList.remove('hidden');
+                    if (onSelect) onSelect(selectedName);
+                });
+            });
+        }
+
+        input.addEventListener('input', function () {
+            const query = this.value.trim();
+            if (query.length > 0) {
+                clearBtn.classList.remove('hidden');
+                renderResults(fuse.search(query));
+            } else {
+                clearBtn.classList.add('hidden');
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        clearBtn.addEventListener('click', function () {
+            input.value = '';
+            clearBtn.classList.add('hidden');
+            dropdown.classList.add('hidden');
+            input.focus();
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    setupPassengerCombobox('from-search-input', 'btn-clear-from', 'from-autocomplete-dropdown', (val) => {
+        if (liveOriginEl) liveOriginEl.textContent = val;
+    });
+
+    setupPassengerCombobox('to-search-input', 'btn-clear-to', 'to-autocomplete-dropdown', (val) => {
+        if (liveDestEl) liveDestEl.textContent = val;
+    });
+});
+</script>
+<!-- Universal i18n Engine Script -->
+<script src="../i18n.js"></script>
+</body>
+</html>
