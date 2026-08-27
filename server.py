@@ -1,4 +1,4 @@
-﻿"""
+"""
 BusRadar - Real-Time Geospatial Telemetry & Edge-AI Multicast Engine
 Team LogiCode | Smart India Hackathon (SIH) Architecture
 Corridor: Yamuna Nagar ⇄ MMDU Mullana (Haryana)
@@ -120,6 +120,20 @@ async def get_passenger_search():
         return HTMLResponse(content=f.read())
 
 
+# Telemetry packet metrics for throughput calculation
+telemetry_packet_log: List[float] = []
+logged_anomalies: List[Dict[str, Any]] = [
+    {
+        "id": "ANOM-7821",
+        "type": "CONGESTION_ALERT",
+        "location": "Kalanaur Chowk (Yamuna Nagar)",
+        "severity": "MODERATE",
+        "reported_delay_mins": 5,
+        "timestamp_iso": datetime.utcnow().isoformat() + "Z"
+    }
+]
+
+
 @app.get("/api/health")
 async def health_check():
     """REST Health Endpoint returning server uptime, active sockets, and fleet status."""
@@ -143,6 +157,56 @@ async def get_fleet():
     return {
         "fleet": list(fleet_registry.values()),
         "total_active": len(fleet_registry)
+    }
+
+
+@app.get("/api/urban-analytics")
+async def get_urban_analytics():
+    """
+    Municipal Transit & Corridor Analytics Endpoint for Smart City Command Centers.
+    Calculates live throughput, corridor speed averages, congestion metrics, and delay anomalies.
+    """
+    now = time.time()
+    # Retain packet timestamps from the last 10 seconds for throughput rate
+    global telemetry_packet_log
+    telemetry_packet_log = [t for t in telemetry_packet_log if now - t <= 10.0]
+    throughput_pps = round(len(telemetry_packet_log) / 10.0, 2) if telemetry_packet_log else 0.0
+
+    active_vehicles = list(fleet_registry.values())
+    total_vehicles = len(active_vehicles)
+    
+    # Calculate average speed
+    speeds = [v.get("speed_kmh", 40) for v in active_vehicles if v.get("speed_kmh", 0) > 0]
+    avg_speed = round(sum(speeds) / len(speeds), 1) if speeds else 42.0
+
+    # Calculate cumulative delays
+    delays = [v.get("delay_minutes", 0) for v in active_vehicles]
+    cumulative_delay = sum(delays)
+    avg_delay = (cumulative_delay / total_vehicles) if total_vehicles > 0 else 0
+
+    if avg_delay == 0:
+        congestion_rating = "Nominal (Free Flow)"
+        congestion_code = "NOMINAL"
+    elif avg_delay <= 10:
+        congestion_rating = "Moderate Traffic"
+        congestion_code = "MODERATE"
+    else:
+        congestion_rating = "Heavy Congestion"
+        congestion_code = "CONGESTED"
+
+    return {
+        "corridor": "Yamuna Nagar ⇄ MMDU Mullana Corridor (State Highway 4)",
+        "timestamp_iso": datetime.utcnow().isoformat() + "Z",
+        "metrics": {
+            "total_active_vehicles": total_vehicles,
+            "telemetry_throughput_pps": throughput_pps,
+            "corridor_avg_speed_kmh": avg_speed,
+            "congestion_rating": congestion_rating,
+            "congestion_code": congestion_code,
+            "cumulative_route_delay_mins": cumulative_delay
+        },
+        "road_anomalies_logged": logged_anomalies,
+        "fleet_telemetry_snapshot": active_vehicles
     }
 
 
@@ -174,6 +238,7 @@ async def telemetry_websocket(websocket: WebSocket):
             event_type = message.get("event_type", "UNKNOWN")
 
             if event_type == "DRIVER_TELEMETRY":
+                telemetry_packet_log.append(time.time())
                 bus_id = message.get("bus_id", "HR-02-AB-1234")
                 lat = message.get("lat")
                 lng = message.get("lng")

@@ -452,6 +452,75 @@ document.addEventListener('DOMContentLoaded', function () {
         updateEtaUI();
     }
 
+    let lastPacketTimestamp = 0;
+    let deadReckoningActive = false;
+    let currentWaypointIndex = 0;
+
+    // High-resolution dense waypoint interpolation for smooth kinematics
+    function generateDenseSteps(waypoints, stepsPerSegment = 10) {
+        const dense = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const start = waypoints[i];
+            const end = waypoints[i + 1];
+            for (let s = 0; s < stepsPerSegment; s++) {
+                const fraction = s / stepsPerSegment;
+                const lat = start[0] + (end[0] - start[0]) * fraction;
+                const lng = start[1] + (end[1] - start[1]) * fraction;
+                dense.push([lat, lng]);
+            }
+        }
+        dense.push(waypoints[waypoints.length - 1]);
+        return dense;
+    }
+
+    const denseRouteWaypoints = generateDenseSteps(routeWaypoints, 10);
+
+    function findClosestDenseIndex(lat, lng) {
+        let minDist = Infinity;
+        let bestIdx = 0;
+        for (let i = 0; i < denseRouteWaypoints.length; i++) {
+            const dLat = denseRouteWaypoints[i][0] - lat;
+            const dLng = denseRouteWaypoints[i][1] - lng;
+            const distSq = dLat * dLat + dLng * dLng;
+            if (distSq < minDist) {
+                minDist = distSq;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
+
+    function setLiveConnectionState(isLive, isDeadReckoning = false) {
+        const savedLang = localStorage.getItem('busradar_lang') || 'en';
+        const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
+        
+        if (isLive && !isDeadReckoning) {
+            if (telemetryModeLabel) {
+                telemetryModeLabel.textContent = dict["pass_ws_live"] || 'WEBSOCKET: LIVE';
+                telemetryModeLabel.className = 'text-xs font-black text-status-success tracking-wide uppercase';
+            }
+            if (telemetryDot) {
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
+            }
+        } else if (isDeadReckoning) {
+            if (telemetryModeLabel) {
+                telemetryModeLabel.textContent = dict["pass_reconnecting_interp"] || 'Reconnecting • Dead-Reckoning Active';
+                telemetryModeLabel.className = 'text-[11px] font-black text-amber-600 tracking-tight uppercase animate-pulse';
+            }
+            if (telemetryDot) {
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping';
+            }
+        } else {
+            if (telemetryModeLabel) {
+                telemetryModeLabel.textContent = dict["pass_dead_reckoning"] || 'Live Interpolation Active';
+                telemetryModeLabel.className = 'text-xs font-black text-blue-600 tracking-wide uppercase';
+            }
+            if (telemetryDot) {
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse';
+            }
+        }
+    }
+
     function connectPassengerWebSocket() {
         const WS_URL = 'ws://localhost:8000/ws/telemetry';
         try {
@@ -459,8 +528,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             socket.onopen = function () {
                 isWsLive = true;
-                if (telemetryModeLabel) telemetryModeLabel.textContent = 'WEBSOCKET: LIVE';
-                if (telemetryDot) telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
+                setLiveConnectionState(true, false);
             };
 
             socket.onmessage = function (event) {
@@ -468,8 +536,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     const data = JSON.parse(event.data);
 
                     if (data.event_type === 'DRIVER_TELEMETRY' && data.lat && data.lng) {
+                        lastPacketTimestamp = Date.now();
+                        deadReckoningActive = false;
+                        setLiveConnectionState(true, false);
+
                         const newPos = [data.lat, data.lng];
                         busMarker.setLatLng(newPos);
+                        currentWaypointIndex = findClosestDenseIndex(data.lat, data.lng);
 
                         if (liveSpeedEl && data.speed_kmh) {
                             liveSpeedEl.textContent = `${data.speed_kmh} km/h`;
@@ -505,36 +578,45 @@ document.addEventListener('DOMContentLoaded', function () {
 
             socket.onerror = function () {
                 isWsLive = false;
-                if (telemetryModeLabel) telemetryModeLabel.textContent = 'LOCAL RADAR SIM';
+                setLiveConnectionState(false, true);
             };
 
             socket.onclose = function () {
                 isWsLive = false;
-                if (telemetryModeLabel) telemetryModeLabel.textContent = 'RECONNECTING WS';
+                setLiveConnectionState(false, true);
                 setTimeout(connectPassengerWebSocket, 3000);
             };
         } catch (err) {
             console.warn('WebSocket connect error:', err);
+            isWsLive = false;
+            setLiveConnectionState(false, true);
         }
     }
 
     connectPassengerWebSocket();
 
-    let simIndex = 0;
+    // Kinematic Dead-Reckoning & Connection Resilience Ticker (Runs at 500ms)
     setInterval(() => {
-        if (!isWsLive) {
-            simIndex = (simIndex + 1) % routeWaypoints.length;
-            const coord = routeWaypoints[simIndex];
+        const timeSinceLastPacket = Date.now() - lastPacketTimestamp;
+        const needsDeadReckoning = (!isWsLive) || (timeSinceLastPacket > 2000 && lastPacketTimestamp > 0) || (lastPacketTimestamp === 0);
+
+        if (needsDeadReckoning) {
+            deadReckoningActive = true;
+            setLiveConnectionState(isWsLive, true);
+
+            // Kinematically extrapolate forward along dense route
+            currentWaypointIndex = (currentWaypointIndex + 1) % denseRouteWaypoints.length;
+            const coord = denseRouteWaypoints[currentWaypointIndex];
             busMarker.setLatLng(coord);
 
-            const remainingFraction = 1 - (simIndex / routeWaypoints.length);
+            const remainingFraction = 1 - (currentWaypointIndex / denseRouteWaypoints.length);
             lastCalculatedBaseEta = Math.max(1, Math.round(remainingFraction * 12));
             updateEtaUI();
 
-            const speed = Math.floor(36 + Math.sin(simIndex) * 6);
-            if (liveSpeedEl) liveSpeedEl.textContent = `${speed} km/h`;
+            const simulatedSpeed = Math.floor(40 + Math.sin(currentWaypointIndex * 0.3) * 6);
+            if (liveSpeedEl) liveSpeedEl.textContent = `${simulatedSpeed} km/h`;
         }
-    }, 2000);
+    }, 800);
 
     // UPI Modal Flow
     const upiModal = document.getElementById('modal-upi-pass');

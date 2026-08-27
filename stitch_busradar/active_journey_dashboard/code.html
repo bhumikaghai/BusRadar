@@ -113,8 +113,8 @@
         <!-- Floating Telemetry Pills -->
         <div class="absolute top-3 left-3 right-3 z-20 flex justify-between pointer-events-none">
             <div class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-2 pointer-events-auto">
-                <span class="w-2.5 h-2.5 rounded-full bg-status-success animate-ping"></span>
-                <span data-i18n="journey_status_active" class="text-xs text-status-success font-black tracking-wide">ON-BOARD GPS ACTIVE</span>
+                <span id="active-gps-dot" class="w-2.5 h-2.5 rounded-full bg-status-success animate-ping"></span>
+                <span id="active-gps-status-label" data-i18n="journey_status_active" class="text-xs text-status-success font-black tracking-wide">ON-BOARD GPS ACTIVE</span>
             </div>
             <div class="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-1.5 pointer-events-auto">
                 <span class="material-symbols-outlined text-[16px] text-primary">speed</span>
@@ -404,17 +404,62 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 8. WebSocket Telemetry Listener
+    const activeGpsDot = document.getElementById('active-gps-dot');
+    const activeGpsStatusLabel = document.getElementById('active-gps-status-label');
+    let lastJourneyPacketTime = 0;
+    let isJourneyWsLive = false;
+
+    function setJourneyConnectionState(isLive, isDeadReckoning = false) {
+        const savedLang = localStorage.getItem('busradar_lang') || 'en';
+        const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
+
+        if (isLive && !isDeadReckoning) {
+            if (activeGpsStatusLabel) {
+                activeGpsStatusLabel.textContent = dict["journey_status_active"] || 'ON-BOARD GPS ACTIVE';
+                activeGpsStatusLabel.className = 'text-xs text-status-success font-black tracking-wide';
+            }
+            if (activeGpsDot) activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
+        } else if (isDeadReckoning) {
+            if (activeGpsStatusLabel) {
+                activeGpsStatusLabel.textContent = dict["pass_reconnecting_interp"] || 'Reconnecting • Dead-Reckoning Active';
+                activeGpsStatusLabel.className = 'text-[11px] text-amber-600 font-black tracking-tight animate-pulse';
+            }
+            if (activeGpsDot) activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping';
+        }
+    }
+
+    // 8. WebSocket Telemetry Listener with Dead-Reckoning Sync
     function connectJourneyWebSocket() {
         const WS_URL = 'ws://localhost:8000/ws/telemetry';
         try {
             const socket = new WebSocket(WS_URL);
+            
+            socket.onopen = function () {
+                isJourneyWsLive = true;
+                setJourneyConnectionState(true, false);
+            };
+
             socket.onmessage = function (event) {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.event_type === 'DRIVER_TELEMETRY') {
+                        lastJourneyPacketTime = Date.now();
+                        setJourneyConnectionState(true, false);
+
                         if (data.lat && data.lng) {
                             busMarker.setLatLng([data.lat, data.lng]);
+                            
+                            // Find closest step
+                            let minDist = Infinity;
+                            for (let i = 0; i < journeySteps.length; i++) {
+                                const dLat = journeySteps[i][0] - data.lat;
+                                const dLng = journeySteps[i][1] - data.lng;
+                                const dist = dLat*dLat + dLng*dLng;
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    currentStep = i;
+                                }
+                            }
                         }
                         if (data.speed_kmh && speedEl) {
                             speedEl.textContent = `${data.speed_kmh} km/h`;
@@ -431,17 +476,37 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 } catch (e) {}
             };
-            socket.onclose = () => setTimeout(connectJourneyWebSocket, 3000);
-        } catch (e) {}
+            socket.onclose = () => {
+                isJourneyWsLive = false;
+                setJourneyConnectionState(false, true);
+                setTimeout(connectJourneyWebSocket, 3000);
+            };
+            socket.onerror = () => {
+                isJourneyWsLive = false;
+                setJourneyConnectionState(false, true);
+            };
+        } catch (e) {
+            isJourneyWsLive = false;
+            setJourneyConnectionState(false, true);
+        }
     }
 
     connectJourneyWebSocket();
 
-    // 9. Real-Time Journey Animation & Progress Bar Calculation
+    // 9. Real-Time Dead-Reckoning & Dynamic Progress Bar Calculation
     setInterval(() => {
-        currentStep = (currentStep + 1) % journeySteps.length;
-        const coord = journeySteps[currentStep];
-        busMarker.setLatLng(coord);
+        const timeSinceLast = Date.now() - lastJourneyPacketTime;
+        const inDeadReckoning = (!isJourneyWsLive) || (timeSinceLast > 2000 && lastJourneyPacketTime > 0) || (lastJourneyPacketTime === 0);
+
+        if (inDeadReckoning) {
+            setJourneyConnectionState(isJourneyWsLive, true);
+            currentStep = (currentStep + 1) % journeySteps.length;
+            const coord = journeySteps[currentStep];
+            busMarker.setLatLng(coord);
+
+            const currentSpeed = Math.floor(48 + Math.sin(currentStep * 0.4) * 6);
+            if (speedEl) speedEl.textContent = `${currentSpeed} km/h`;
+        }
 
         // Progress Calculation
         const progressPct = Math.round((currentStep / (journeySteps.length - 1)) * 100);
@@ -460,11 +525,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (countdownEl) {
             countdownEl.textContent = `${minsLeft}m ${secsLeft < 10 ? '0' : ''}${secsLeft}s`;
         }
-
-        // Realistic highway speed variation
-        const currentSpeed = Math.floor(50 + Math.sin(currentStep) * 6);
-        if (speedEl) speedEl.textContent = `${currentSpeed} km/h`;
-    }, 2000);
+    }, 1000);
 
     // 10. Interactive Modals Wiring
     const qrModal = document.getElementById('modal-qr-ticket');

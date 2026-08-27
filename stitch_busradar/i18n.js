@@ -44,6 +44,9 @@ const BUSRADAR_I18N = {
         "driver_view_passenger": "View Passenger Radar",
         "driver_btn_start": "START LIVE BROADCAST",
         "driver_btn_stop": "STOP BROADCASTING",
+        "driver_demo_btn": "🎮 Evaluation Demo Route (Auto-Simulate GPS)",
+        "driver_demo_active": "🛑 Stop Demo Route Simulation",
+        "driver_demo_badge": "EVALUATION DEMO SIMULATION",
         "driver_report_delay": "Report Transit Delay",
         "driver_on_time": "ON TIME",
         "driver_delay_5": "+5 Mins",
@@ -55,6 +58,8 @@ const BUSRADAR_I18N = {
 
         // Passenger Dashboard
         "pass_ws_live": "WEBSOCKET: LIVE",
+        "pass_reconnecting_interp": "Reconnecting • Dead-Reckoning Active",
+        "pass_dead_reckoning": "Live Interpolation Active",
         "pass_route_title": "Route 104 Express",
         "pass_eta_live": "Live ETA: 12 mins",
         "pass_traffic_optimal": "Optimal Traffic",
@@ -145,6 +150,9 @@ const BUSRADAR_I18N = {
         "driver_view_passenger": "यात्री रडार देखें",
         "driver_btn_start": "लाइव प्रसारण शुरू करें",
         "driver_btn_stop": "प्रसारण रोकें",
+        "driver_demo_btn": "🎮 मूल्यांकन डेमो रूट (ऑटो-सिम्युलेट GPS)",
+        "driver_demo_active": "🛑 डेमो रूट सिमुलेशन रोकें",
+        "driver_demo_badge": "मूल्यांकन डेमो सिमुलेशन",
         "driver_report_delay": "पारगमन देरी की रिपोर्ट करें",
         "driver_on_time": "समय पर",
         "driver_delay_5": "+5 मिनट",
@@ -156,6 +164,8 @@ const BUSRADAR_I18N = {
 
         // Passenger Dashboard
         "pass_ws_live": "वेबसॉकेट: लाइव",
+        "pass_reconnecting_interp": "पुनः कनेक्ट हो रहा है • डेड-रेकनिंग चालू",
+        "pass_dead_reckoning": "लाइव इंटरपोलेशन सक्रिय",
         "pass_route_title": "रूट 104 एक्सप्रेस",
         "pass_eta_live": "लाइव आगमन: 12 मिनट",
         "pass_traffic_optimal": "सुगम यातायात (समय पर)",

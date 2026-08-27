@@ -148,10 +148,16 @@
     </section>
 
     <!-- Primary Action: Broadcast Toggle Button (Standardized h-16) -->
-    <section>
+    <section class="flex flex-col gap-2.5">
         <button id="btn-broadcast-toggle" class="w-full h-16 bg-green-400 text-black font-black text-base rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-[0_0_25px_rgba(77,224,130,0.35)] tracking-wider hover:bg-[#48ff26] cursor-pointer">
             <span class="material-symbols-outlined text-[26px]">sensors</span>
             <span id="broadcast-btn-text" data-i18n="driver_btn_start">START LIVE BROADCAST</span>
+        </button>
+
+        <!-- 1-Click Evaluation Demo Route Mode Button -->
+        <button id="btn-eval-simulation" class="w-full h-14 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-blue-400/40">
+            <span class="material-symbols-outlined text-[22px] text-blue-200">smart_toy</span>
+            <span id="eval-sim-btn-text" data-i18n="driver_demo_btn">🎮 Evaluation Demo Route (Auto-Simulate GPS)</span>
         </button>
     </section>
 
@@ -450,9 +456,116 @@ document.addEventListener('DOMContentLoaded', function () {
                 isBroadcasting = false;
                 clearInterval(broadcastInterval);
                 if (streamCard) streamCard.classList.add('hidden');
-                if (broadcastBtnText) broadcastBtnText.textContent = 'START LIVE BROADCAST';
+                const savedLang = localStorage.getItem('busradar_lang') || 'en';
+                const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
+                if (broadcastBtnText) broadcastBtnText.textContent = dict["driver_btn_start"] || 'START LIVE BROADCAST';
                 broadcastBtn.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-[0_0_25px_rgba(239,68,68,0.35)]');
                 broadcastBtn.classList.add('bg-green-400', 'text-black', 'hover:bg-[#48ff26]', 'shadow-[0_0_25px_rgba(77,224,130,0.35)]');
+            }
+        });
+    }
+
+    // Evaluation Highway Route Simulation Engine
+    const evalHighwayRoute = [
+        [30.1290, 77.2674], // Yamuna Nagar Bus Stand
+        [30.1340, 77.2750],
+        [30.1435, 77.2880], // Jagadhri Bus Stand
+        [30.1550, 77.2750],
+        [30.1650, 77.2600], // Kalanaur Chowk
+        [30.1780, 77.2350],
+        [30.1900, 77.2100], // Mustafabad Hub
+        [30.2050, 77.1700],
+        [30.2200, 77.1300], // Barara Junction
+        [30.2350, 77.0950],
+        [30.2450, 77.0650], // Mullana Town
+        [30.2520, 77.0470]  // MMDU Campus Gate
+    ];
+
+    function generateEvalSteps(waypoints, stepsPerSegment = 12) {
+        const dense = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const start = waypoints[i];
+            const end = waypoints[i + 1];
+            for (let s = 0; s < stepsPerSegment; s++) {
+                const frac = s / stepsPerSegment;
+                const lat = start[0] + (end[0] - start[0]) * frac;
+                const lng = start[1] + (end[1] - start[1]) * frac;
+                dense.push([parseFloat(lat.toFixed(5)), parseFloat(lng.toFixed(5))]);
+            }
+        }
+        dense.push(waypoints[waypoints.length - 1]);
+        return dense;
+    }
+
+    const evalDenseRoute = generateEvalSteps(evalHighwayRoute, 12);
+    let evalStepIndex = 0;
+    let isEvalSimActive = false;
+    let evalSimInterval = null;
+
+    const evalSimBtn = document.getElementById('btn-eval-simulation');
+    const evalSimBtnText = document.getElementById('eval-sim-btn-text');
+
+    if (evalSimBtn) {
+        evalSimBtn.addEventListener('click', function () {
+            const savedLang = localStorage.getItem('busradar_lang') || 'en';
+            const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
+
+            if (!isEvalSimActive) {
+                isEvalSimActive = true;
+                
+                // Populate preset route fields
+                if (plateInput) plateInput.value = 'HR-02-AB-1234';
+                if (startStopInput) startStopInput.value = 'Yamuna Nagar Bus Stand';
+                if (destStopInput) destStopInput.value = 'MMDU Campus Gate';
+                if (depTimeInput) depTimeInput.value = '08:30';
+                if (arrTimeInput) arrTimeInput.value = '09:15';
+
+                if (streamCard) streamCard.classList.remove('hidden');
+                evalSimBtnText.textContent = dict["driver_demo_active"] || '🛑 Stop Demo Route Simulation';
+                evalSimBtn.className = 'w-full h-14 bg-gradient-to-r from-rose-700 to-red-700 hover:from-rose-600 hover:to-red-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-red-400/40 animate-pulse';
+
+                // Stop standard broadcast if active
+                if (isBroadcasting) {
+                    isBroadcasting = false;
+                    clearInterval(broadcastInterval);
+                    if (broadcastBtnText) broadcastBtnText.textContent = dict["driver_btn_start"] || 'START LIVE BROADCAST';
+                    broadcastBtn.classList.remove('bg-red-600', 'text-white');
+                    broadcastBtn.classList.add('bg-green-400', 'text-black');
+                }
+
+                evalSimInterval = setInterval(() => {
+                    packetCount++;
+                    if (packetsEl) packetsEl.textContent = packetCount;
+
+                    evalStepIndex = (evalStepIndex + 1) % evalDenseRoute.length;
+                    const coord = evalDenseRoute[evalStepIndex];
+                    const speed = Math.floor(40 + Math.sin(evalStepIndex * 0.2) * 5);
+
+                    if (latEl) latEl.textContent = `${coord[0]}° N`;
+                    if (lngEl) lngEl.textContent = `${coord[1]}° E`;
+
+                    const payload = {
+                        event_type: "DRIVER_TELEMETRY",
+                        bus_id: "HR-02-AB-1234",
+                        route_from: "Yamuna Nagar Bus Stand",
+                        route_to: "MMDU Campus Gate",
+                        departure_time: "08:30",
+                        arrival_time: "09:15",
+                        lat: coord[0],
+                        lng: coord[1],
+                        speed_kmh: speed,
+                        timestamp: Date.now()
+                    };
+
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify(payload));
+                    }
+                }, 1000);
+            } else {
+                isEvalSimActive = false;
+                clearInterval(evalSimInterval);
+                evalSimBtnText.textContent = dict["driver_demo_btn"] || '🎮 Evaluation Demo Route (Auto-Simulate GPS)';
+                evalSimBtn.className = 'w-full h-14 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-blue-400/40';
             }
         });
     }

@@ -65,9 +65,18 @@
 **Date:** 2026-08-20  
 **Status:** Fully Standardized, Accessible & Multilingual
 
+---
+
+## Phase 14: Kinematic Dead-Reckoning, Urban Analytics API & Evaluation Demo Mode
+**Date:** 2026-08-27  
+**Status:** Enterprise Hackathon Polish & Evaluation Readiness Complete
+
 ### Summary of Changes
 
 | Target File | Modification Type | Architectural Impact & Details |
 | :--- | :--- | :--- |
-| [`stitch_busradar/active_journey_dashboard/code.html`](stitch_busradar/active_journey_dashboard/code.html) | **Transit UX & i18n Overhaul** | • **Persistent Hindi Localization:** Automatically inherits language preference (`busradar_lang`) from `localStorage` on load; instant live translation without reload.<br>• **Live Corridor Progress Bar:** Dynamic distance fill indicator tracking progress between Yamuna Nagar, Mustafabad, Barara, and MMDU.<br>• **Speed & Distance Remaining Metrics:** Live readout for speed (`52 km/h`) and distance remaining (`14.2 km`) with multilingual labels (`गति` / `Speed`, `शेष दूरी` / `Distance Remaining`).<br>• **High-Contrast Digital QR Pass:** Dedicated modal for conductor checking with offline verification badge, dynamic PNR, bus plate, and expiry.<br>• **Emergency SOS Hub:** One-tap live tracking link copy, WhatsApp emergency broadcast, and 112 helpline trigger.<br>• **Massive Legibility (`h-16` / `text-3xl`):** Huge live ETA countdown (`text-3xl font-extrabold`), large `h-16` touch targets, locked in native mobile chassis (`max-w-md mx-auto`). |
-| [`stitch_busradar/i18n.js`](stitch_busradar/i18n.js) | **Dictionary Alignment** | • Mapped all transit terms: `"Active Journey"` ➔ `"सक्रिय यात्रा"`, `"Live ETA"` ➔ `"लाइव आगमन का समय"`, `"Speed"` ➔ `"गति"`, `"Distance Remaining"` ➔ `"शेष दूरी"`, `"Next Stop"` ➔ `"अगला स्टॉप"`, `"Emergency / SOS"` ➔ `"आपातकाल / SOS"`, `"View Digital Pass"` ➔ `"डिजिटल पास देखें"`, `"On Time"` ➔ `"समय पर"`, `"Delay"` ➔ `"देरी"`, `"End Journey"` ➔ `"यात्रा समाप्त करें"`, `"Yamuna Nagar"` ➔ `"यमुनानगर"`, `"MMDU Campus Gate"` ➔ `"MMDU कैंपस गेट"`. |
+| [`server.py`](server.py) | **Municipal REST Endpoint & Packet Metrics** | • Added `GET /api/urban-analytics` serving real-time throughput rate (pps), corridor average velocity, dynamic congestion grade (`Nominal`, `Moderate`, `Congested`), logged road anomalies, and cumulative delay metrics.<br>• Telemetry timestamp sliding-window logger for live throughput auditing. |
+| [`stitch_busradar/search_booking_dashboard/code.html`](stitch_busradar/search_booking_dashboard/code.html) | **Kinematic Dead-Reckoning** | • Implemented dense waypoint dead-reckoning extrapolator active during network drops (>2s stall or offline).<br>• Dynamic connection resilience badge: `Reconnecting • Dead-Reckoning Active` (`pass_reconnecting_interp`). |
+| [`stitch_busradar/active_journey_dashboard/code.html`](stitch_busradar/active_journey_dashboard/code.html) | **Journey Dead-Reckoning & ETA Decay** | • Connected live GPS status to dead-reckoning engine; vehicle continues smooth traversal along the corridor even with interrupted socket stream.<br>• Dynamic distance-decay countdown and corridor progress percentage sync. |
+| [`stitch_busradar/driver_telemetry_dashboard/code.html`](stitch_busradar/driver_telemetry_dashboard/code.html) | **1-Click Evaluation Demo Route** | • Added `🎮 Evaluation Demo Route (Auto-Simulate GPS)` one-click simulator.<br>• Streams dense route packets between Yamuna Nagar Bus Stand and MMDU Campus Gate at 40 km/h with live socket broadcast. |
+| [`stitch_busradar/i18n.js`](stitch_busradar/i18n.js) | **Bilingual Localization Expansion** | • Injected bilingual translations for demo simulation triggers, dead-reckoning badges, and reconnecting states. |
