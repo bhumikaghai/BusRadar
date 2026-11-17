@@ -41,14 +41,26 @@ ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 SIMULATION_ENABLED = os.getenv("SIMULATION_ENABLED", "false").lower() in ("true", "1", "yes")
 SERVER_START_TIME = time.time()
 
-# Background task: Clean up inactive trips (>10 minutes silence) for privacy & memory safety
+# Background task: Clean up inactive trips and detect stale telemetry for deterministic client updates
 async def periodic_trip_cleanup_task():
     while True:
-        await asyncio.sleep(15)
+        await asyncio.sleep(5)
         now = time.time()
         expired_buses = []
         for bus_id, trip in list(active_trips.items()):
-            if now - trip.get("last_updated_timestamp", 0) > 600: # 10 minutes silence
+            age = now - trip.get("last_updated_timestamp", 0)
+            # Detect silence > 25 seconds: mark as STALE and broadcast event
+            if age > 25 and trip.get("status") == "LIVE":
+                trip["status"] = "STALE"
+                logger.info(f"Bus {bus_id} marked STALE after {age:.1f}s silence")
+                await manager.broadcast({
+                    "event_type": "DRIVER_STALE",
+                    "bus_id": bus_id,
+                    "age_seconds": round(age, 1),
+                    "server_timestamp": now
+                })
+            # Clean up after 10 minutes silence
+            if age > 600:
                 expired_buses.append(bus_id)
 
         for bus_id in expired_buses:
@@ -127,6 +139,12 @@ registered_buses: Dict[str, Dict[str, Any]] = {
     "HR-02-B-2002": {
         "bus_id": "HR-02-B-2002",
         "pin_hash": _hash_pin("2002"),
+        "route_id": "ynr_mmdu_sh4",
+        "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
+    },
+    "HR-02-C-3003": {
+        "bus_id": "HR-02-C-3003",
+        "pin_hash": _hash_pin("3003"),
         "route_id": "ynr_mmdu_sh4",
         "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
     },
@@ -380,19 +398,35 @@ async def get_manifest():
 async def get_sw():
     return FileResponse("static/sw.js", media_type="application/javascript")
 
-# Health Endpoint (Lightweight for cron-job.org or monitoring)
+# Health Endpoint (Lightweight for cron-job.org, Cloud Monitoring & Render)
 @app.get("/api/health")
 @limiter.limit("120/minute")
 async def health_check(request: Request):
     uptime = round(time.time() - SERVER_START_TIME, 1)
+    now_ts = time.time()
+    active_summary = []
+    for b_id, trip in active_trips.items():
+        active_summary.append({
+            "bus_id": b_id,
+            "status": trip.get("status", "LIVE"),
+            "age_seconds": round(now_ts - trip.get("last_updated_timestamp", now_ts), 1),
+            "is_simulation": trip.get("is_simulation", False),
+            "speed_kmh": trip.get("speed_kmh", 0.0)
+        })
+
     return {
         "status": "healthy",
         "service": "BusRadar-Engine",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "uptime_seconds": uptime,
         "active_trips_count": len(active_trips),
         "active_connections": len(manager.connections),
-        "timestamp": time.time(),
+        "gtfs_rt_available": True,
+        "gtfs_static_available": True,
+        "simulation_enabled": SIMULATION_ENABLED,
+        "registered_fleet_count": len(registered_buses),
+        "active_fleet_summary": active_summary,
+        "timestamp": now_ts,
         "free_tier_ready": True
     }
 
@@ -578,6 +612,164 @@ async def get_urban_analytics(request: Request):
         "congestion_status": "Free Flow" if total_delay == 0 else ("Moderate" if total_delay <= 10 else "Heavy Delay")
     }
 
+# ==============================================================================
+# GTFS & GTFS-REALTIME (GTFS-RT) STANDARDS ENGINE
+# ==============================================================================
+
+@app.get("/api/gtfs-rt/vehicle-positions")
+async def get_gtfs_rt_vehicle_positions():
+    """
+    GTFS-Realtime VehiclePositions feed in standard JSON format.
+    Conforms to GTFS-RT specification v2.0 for third-party transit aggregators.
+    """
+    now_ts = int(time.time())
+    entities = []
+
+    for bus_id, trip in active_trips.items():
+        # GTFS-RT Position speed is in meters per second (speed_kmh / 3.6)
+        speed_mps = round(trip.get("speed_kmh", 0.0) / 3.6, 2)
+        bearing = float(trip.get("heading", 0.0))
+        lat = float(trip.get("lat", 0.0))
+        lng = float(trip.get("lng", 0.0))
+        packet_time = int(trip.get("last_updated_timestamp", now_ts))
+
+        entity = {
+            "id": f"entity_{bus_id}",
+            "is_deleted": False,
+            "vehicle": {
+                "trip": {
+                    "trip_id": f"trip_{trip.get('route_id', 'ynr_mmdu_sh4')}_{bus_id}",
+                    "route_id": trip.get("route_id", "ynr_mmdu_sh4"),
+                    "schedule_relationship": "SCHEDULED"
+                },
+                "position": {
+                    "latitude": lat,
+                    "longitude": lng,
+                    "bearing": bearing,
+                    "speed": speed_mps
+                },
+                "current_status": "IN_TRANSIT_TO",
+                "timestamp": packet_time,
+                "congestion_level": "RUNNING_SMOOTHLY" if trip.get("delay_minutes", 0) == 0 else "STOP_AND_GO",
+                "vehicle": {
+                    "id": bus_id,
+                    "label": bus_id,
+                    "license_plate": bus_id
+                }
+            }
+        }
+        entities.append(entity)
+
+    feed = {
+        "header": {
+            "gtfs_realtime_version": "2.0",
+            "incrementality": "FULL_DATASET",
+            "timestamp": now_ts
+        },
+        "entity": entities
+    }
+    return JSONResponse(content=feed, media_type="application/json")
+
+@app.get("/api/gtfs/feed.json")
+async def get_gtfs_feed_summary():
+    """Unified GTFS static feed manifest and metadata."""
+    return {
+        "agency": "Haryana State Transport (BusRadar)",
+        "agency_id": "HR_ROADWAYS",
+        "timezone": "Asia/Kolkata",
+        "corridor": "Yamuna Nagar Stand ⇄ MMDU Campus Gate",
+        "available_tables": [
+            "/api/gtfs/agency.txt",
+            "/api/gtfs/routes.txt",
+            "/api/gtfs/stops.txt",
+            "/api/gtfs/trips.txt",
+            "/api/gtfs/stop_times.txt"
+        ],
+        "routes_count": len(routes_db),
+        "total_stops": sum(len(r.get("stops", [])) for r in routes_db.values())
+    }
+
+@app.get("/api/gtfs/{filename}")
+async def get_gtfs_table(filename: str):
+    """
+    Dynamically exports standard GTFS CSV tables for transit GIS interoperability.
+    Supports agency.txt, routes.txt, stops.txt, trips.txt, stop_times.txt.
+    """
+    valid_tables = {"agency.txt", "routes.txt", "stops.txt", "trips.txt", "stop_times.txt"}
+    clean_filename = filename.lower().strip()
+    if clean_filename not in valid_tables:
+        return JSONResponse(status_code=404, content={"error": f"Invalid GTFS table. Must be one of: {', '.join(valid_tables)}"})
+
+    if clean_filename == "agency.txt":
+        csv_content = (
+            "agency_id,agency_name,agency_url,agency_timezone,agency_lang,agency_phone\n"
+            "HR_ROADWAYS,Haryana State Transport (BusRadar),https://busradar-bre5.onrender.com,Asia/Kolkata,hi,1800-180-2345\n"
+        )
+    elif clean_filename == "routes.txt":
+        lines = ["route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color"]
+        for r_id, r_data in routes_db.items():
+            lines.append(f"{r_id},HR_ROADWAYS,SH-4,\"{r_data.get('route_name', 'Transit Route')}\",3,10B981,FFFFFF")
+        csv_content = "\n".join(lines) + "\n"
+    elif clean_filename == "stops.txt":
+        lines = ["stop_id,stop_name,stop_lat,stop_lon,location_type"]
+        for r_id, r_data in routes_db.items():
+            for s in r_data.get("stops", []):
+                coords = s.get("coords", [0.0, 0.0])
+                lines.append(f"{s.get('id', 'stop')},\"{s.get('name', 'Stop')}\",{coords[0]},{coords[1]},0")
+        csv_content = "\n".join(lines) + "\n"
+    elif clean_filename == "trips.txt":
+        lines = ["route_id,service_id,trip_id,trip_headsign,direction_id"]
+        for r_id, r_data in routes_db.items():
+            lines.append(f"{r_id},DAILY,trip_{r_id}_up,\"{r_data.get('destination', 'Destination')}\",0")
+            lines.append(f"{r_id},DAILY,trip_{r_id}_down,\"{r_data.get('origin', 'Origin')}\",1")
+        csv_content = "\n".join(lines) + "\n"
+    elif clean_filename == "stop_times.txt":
+        lines = ["trip_id,arrival_time,departure_time,stop_id,stop_sequence"]
+        for r_id, r_data in routes_db.items():
+            stops = r_data.get("stops", [])
+            for idx, s in enumerate(stops, 1):
+                hh = 8 + (idx * 7) // 60
+                mm = (idx * 7) % 60
+                time_str = f"{hh:02d}:{mm:02d}:00"
+                lines.append(f"trip_{r_id}_up,{time_str},{time_str},{s.get('id', 'stop')},{idx}")
+        csv_content = "\n".join(lines) + "\n"
+    else:
+        csv_content = ""
+
+    return Response(content=csv_content, media_type="text/csv", headers={
+        "Content-Disposition": f"inline; filename={clean_filename}"
+    })
+
+# Scaffolding Stubs (Roadmap Features)
+@app.get("/api/gtfs-rt/proto-stub")
+async def gtfs_rt_protobuf_scaffold():
+    """
+    Scaffold stub for GTFS-RT Protobuf binary stream.
+    TODO: Compile google.transit:gtfs-realtime.proto via protobuf runtime in future milestone.
+    """
+    return {
+        "status": "scaffolded",
+        "proto_spec": "google.transit.FeedMessage",
+        "json_endpoint": "/api/gtfs-rt/vehicle-positions",
+        "documentation": "https://developers.google.com/transit/gtfs-realtime",
+        "note": "Production deployment exposes GTFS-RT in JSON format. Protobuf serialization stubbed for future expansion."
+    }
+
+@app.post("/api/rider/verify-delay")
+async def rider_verify_delay_scaffold(payload: Dict[str, Any]):
+    """
+    Crowdsourced rider delay verification scaffold.
+    TODO: Aggregate crowd confirmations before broadcasting SERVICE_ALERT to avoid driver spoofing.
+    """
+    bus_id = html.escape(str(payload.get("bus_id", "")).strip())
+    delay_confirmed = bool(payload.get("delay_confirmed", False))
+    return {
+        "status": "recorded",
+        "bus_id": bus_id,
+        "delay_confirmed": delay_confirmed,
+        "note": "Rider delay confirmation recorded. Threshold voting engine queued for future release."
+    }
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     icon_path = os.path.join("static", "icons", "icon-192.svg")
@@ -673,6 +865,12 @@ async def telemetry_websocket(websocket: WebSocket, token: Optional[str] = Query
                 except ValidationError as ve:
                     logger.warning(f"Invalid telemetry schema from {auth_bus_id}: {ve}")
                     continue
+
+                # Structured audit logging (Coordinates omitted for commuter/driver privacy)
+                logger.info(
+                    f"TELEMETRY_INGEST: bus_id={auth_bus_id} speed={payload.speed_kmh}km/h "
+                    f"acc={payload.accuracy}m seq={payload.sequence_number} sim={payload.is_simulation}"
+                )
 
                 # Filter bad GPS fixes: drop if accuracy > 50 meters
                 if payload.accuracy > 50.0:

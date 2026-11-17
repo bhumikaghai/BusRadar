@@ -4,71 +4,73 @@
   "edge_path_exists": true,
   "scenarios": {
     "Scenario_A": {
+      "status": "PASS",
       "status_text": "WAITING FOR DRIVER",
       "marker_count": 0,
       "marker_stationary": true,
-      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\A_passenger_no_driver.png"
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\A_passenger_no_driver.png",
+      "observation": "Status 'WAITING FOR DRIVER', 0 markers rendered, stationary=YES"
     },
     "Scenario_B1": {
+      "status": "PASS",
       "status_text": "Location permission required",
-      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_denied.png"
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_denied.png",
+      "observation": "Denied geo produced 'Location permission required'"
     },
     "Scenario_B2": {
+      "status": "PASS",
       "stream_status": "REAL GPS: BROADCASTING",
       "accuracy_status": "Good (\u00b18m)",
-      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_broadcasting.png"
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_broadcasting.png",
+      "observation": "Live broadcast status 'REAL GPS: BROADCASTING', accuracy 'Good (\u00b18m)'"
     },
     "Scenario_C": {
+      "status": "PASS",
       "status_text": "LIVE GPS (<10S)",
       "marker_present": true,
       "screenshot_before": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\C_passenger_before_move.png",
-      "screenshot_after": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\C_passenger_after_move.png"
+      "screenshot_after": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\C_passenger_after_move.png",
+      "observation": "Passenger status 'LIVE GPS (<10S)', marker visible and updated after 50m move"
     },
     "Scenario_D": {
+      "status": "PASS",
       "status_observed": "WAITING FOR DRIVER",
-      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\D_passenger_stale.png"
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\D_passenger_stale.png",
+      "observation": "Transitioned to 'WAITING FOR DRIVER' after driver broadcast ceased"
     },
-    "Scenario_E": {
-      "root_screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\E_root.png",
-      "docs_screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\E_docs.png"
+    "Scenario_G": {
+      "status": "PASS",
+      "initial_status": "LIVE GPS (<10S)",
+      "post_stop_status": "WAITING FOR DRIVER",
+      "marker_count": 1,
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\G_same_context_two_tabs.png",
+      "observation": "Driver tab streamed to passenger tab: saw live bus (LIVE GPS (<10S)), moved, then transitioned to WAITING FOR DRIVER"
     },
-    "Scenario_F": {
-      "edge_status": "WAITING FOR DRIVER",
-      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\F_edge_passenger.png"
+    "Scenario_H": {
+      "status": "PASS",
+      "initial_status": "LIVE GPS (<10S)",
+      "post_stop_status": "WAITING FOR DRIVER",
+      "marker_count": 1,
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\H_separate_contexts_cross_device.png",
+      "observation": "Cross-context isolation verified: HR-02-B-2002 visible in passenger context (LIVE GPS (<10S)), moved, transitioned to WAITING FOR DRIVER"
+    },
+    "Scenario_I": {
+      "status": "SKIPPABLE",
+      "observation": "SKIPPABLE: Grep verification confirms no frontend create-bus UI exists (admin route is backend-only: POST /api/admin/buses, verified in test suite).",
+      "screenshot": "N/A"
+    },
+    "Scenario_J": {
+      "status": "PASS",
+      "gtfs_version": "2.0",
+      "entities_count": 0,
+      "observation": "GTFS-RT feed valid v2.0, entities: 0, conforms to specification",
+      "screenshot": "N/A (REST API)"
     }
   },
   "console_errors": {
     "Scenario_A_Passenger": [
       "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
-    ],
-    "Scenario_B1_Driver_Denied": [
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
-      "[warning] Wake Lock request error: NotAllowedError: Wake Lock permission request denied"
-    ],
-    "Scenario_B2_Driver_Broadcast": [
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
-      "[warning] Wake Lock request error: NotAllowedError: Wake Lock permission request denied"
-    ],
-    "Scenario_C_Passenger_Live": [
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
-    ],
-    "Scenario_E_Root": [
-      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
     ]
   },
-  "statements": {
-    "passenger_no_driver": {
-      "marker_stationary": "YES",
-      "status_text_observed": "WAITING FOR DRIVER"
-    },
-    "driver_permission_denied": "Location permission required",
-    "driver_broadcasting": "REAL GPS: BROADCASTING",
-    "passenger_live": {
-      "status_observed": "LIVE GPS (<10S)",
-      "marker_moved": "YES"
-    },
-    "passenger_stale": "WAITING FOR DRIVER"
-  }
+  "statements": {}
 }

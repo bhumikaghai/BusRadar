@@ -504,6 +504,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         ingestBusPacket(data);
                     } else if (data.event_type === 'DRIVER_DELAY') {
                         handleDelayAlert(data);
+                    } else if (data.event_type === 'DRIVER_STALE') {
+                        if (activeBuses.has(data.bus_id)) {
+                            const b = activeBuses.get(data.bus_id);
+                            b.isStale = true;
+                        }
                     } else if (data.event_type === 'TRIP_ENDED') {
                         if (activeBuses.has(data.bus_id)) {
                             const b = activeBuses.get(data.bus_id);
