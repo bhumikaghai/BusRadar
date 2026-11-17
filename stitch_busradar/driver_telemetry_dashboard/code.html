@@ -7,8 +7,10 @@
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<!-- Fuse.js CDN for Fuzzy Autocomplete Search -->
-<script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+<link rel="manifest" href="/manifest.json"/>
+<!-- Leaflet.js for Route Recording Preview -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script id="tailwind-config">
     tailwind.config = {
         darkMode: "class",
@@ -53,8 +55,8 @@
             <span class="material-symbols-outlined text-[24px]">directions_bus</span>
         </div>
         <div>
-            <h1 data-i18n="driver_title" class="text-white font-black text-lg tracking-tight leading-tight">BusRadar</h1>
-            <span id="driver-phone-display" class="text-xs font-mono text-zinc-400 block">Driver: +91 0000000000</span>
+            <h1 data-i18n="app_title" class="text-white font-black text-lg tracking-tight leading-tight">BusRadar</h1>
+            <span id="driver-header-badge" class="text-xs font-mono text-zinc-400 block">Bus: Loading...</span>
         </div>
     </div>
     <div class="flex items-center gap-2">
@@ -70,73 +72,50 @@
 </header>
 
 <!-- Scaled-Up, High-Legibility Scrollable Content Area -->
-<div class="flex-1 overflow-y-auto px-4 flex flex-col gap-4 pb-6 pt-3">
+<div class="flex-1 overflow-y-auto px-4 flex flex-col gap-3.5 pb-6 pt-3">
     
-    <!-- Route Initialization Form -->
-    <section class="bg-zinc-900 p-4 rounded-3xl flex flex-col gap-3.5 border border-zinc-800 shadow-sm relative z-30">
-        <!-- Vehicle Plate Input (h-16) -->
-        <div class="flex flex-col gap-1.5">
-            <label data-i18n="driver_plate_label" class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Vehicle Plate Number</label>
-            <input id="vehicle-plate" class="h-16 bg-black text-white rounded-2xl border border-zinc-800 focus:border-green-400 focus:outline-none px-4 placeholder:text-zinc-600 uppercase font-mono text-base font-black tracking-wider" value="HR-02-AB-1234" placeholder="HR-02-AB-1234" type="text"/>
-        </div>
-        
-        <!-- Dual Autocomplete Combobox Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            
-            <!-- 1. FROM (Starting Stop) Combobox (h-16) -->
-            <div class="flex flex-col gap-1.5 relative">
-                <label data-i18n="driver_from_label" class="text-xs font-bold text-zinc-300 uppercase tracking-wider">From (Starting Stop)</label>
-                <div class="flex items-center bg-black rounded-2xl border border-zinc-800 focus-within:border-green-400 transition-all h-16 px-3.5">
-                    <span class="material-symbols-outlined text-green-400 mr-2 text-[20px]">trip_origin</span>
-                    <input id="start-stop" data-i18n-ph="driver_from_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-white placeholder-zinc-500 focus:ring-0 focus:outline-none" placeholder="Search Origin: Yamuna Nagar..." type="text" value="Yamuna Nagar Bus Stand"/>
-                    <button id="btn-clear-start" class="text-zinc-500 hover:text-white cursor-pointer flex items-center">
-                        <span class="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                </div>
-                <!-- Dropdown -->
-                <div id="start-stop-dropdown" class="hidden absolute top-full left-0 w-full mt-1 bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden z-50 max-h-52 overflow-y-auto divide-y divide-zinc-900"></div>
-            </div>
-            
-            <!-- 2. TO (Destination) Combobox (h-16) -->
-            <div class="flex flex-col gap-1.5 relative">
-                <label data-i18n="driver_to_label" class="text-xs font-bold text-zinc-300 uppercase tracking-wider">To (Destination)</label>
-                <div class="flex items-center bg-black rounded-2xl border border-zinc-800 focus-within:border-green-400 transition-all h-16 px-3.5">
-                    <span class="material-symbols-outlined text-red-400 mr-2 text-[20px]">location_on</span>
-                    <input id="dest-stop" data-i18n-ph="driver_to_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-white placeholder-zinc-500 focus:ring-0 focus:outline-none" placeholder="Search Destination: MMDU..." type="text" value="MMDU Campus Gate"/>
-                    <button id="btn-clear-dest" class="text-zinc-500 hover:text-white cursor-pointer flex items-center">
-                        <span class="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                </div>
-                <!-- Dropdown -->
-                <div id="dest-stop-dropdown" class="hidden absolute top-full left-0 w-full mt-1 bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden z-50 max-h-52 overflow-y-auto divide-y divide-zinc-900"></div>
-            </div>
+    <!-- Active Route Card -->
+    <section class="bg-zinc-900 p-4 rounded-3xl flex flex-col gap-3 border border-zinc-800 shadow-sm relative z-10">
+        <div class="flex items-center justify-between">
+            <span class="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">ASSIGNED VEHICLE</span>
+            <span id="display-bus-plate" class="text-sm font-mono font-black text-green-400 bg-black px-2.5 py-1 rounded-xl border border-zinc-800">HR-02-A-1001</span>
         </div>
 
-        <!-- Timings Grid (h-16) -->
-        <div class="grid grid-cols-2 gap-3">
-            <div class="flex flex-col gap-1.5">
-                <label data-i18n="driver_dep_label" class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Departure</label>
-                <input id="departure-time" class="h-16 bg-black text-white rounded-2xl border border-zinc-800 focus:border-green-400 focus:outline-none px-3.5 [color-scheme:dark] text-sm font-mono font-bold" value="08:30" type="time"/>
+        <div class="flex flex-col gap-1">
+            <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Active Corridor</span>
+            <div class="text-sm font-extrabold text-white flex items-center gap-1.5" id="display-route-name">
+                <span>Yamuna Nagar Stand</span>
+                <span class="text-green-400">➔</span>
+                <span>MMDU Campus Gate</span>
             </div>
-            <div class="flex flex-col gap-1.5">
-                <label data-i18n="driver_arr_label" class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Arrival</label>
-                <input id="arrival-time" class="h-16 bg-black text-white rounded-2xl border border-zinc-800 focus:border-green-400 focus:outline-none px-3.5 [color-scheme:dark] text-sm font-mono font-bold" value="09:15" type="time"/>
+            <span class="text-[11px] text-zinc-400 font-medium">State Highway 4 &bull; Distance ~28.4 km</span>
+        </div>
+
+        <!-- Live GPS Accuracy & Status Meter -->
+        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800/80 text-xs font-mono">
+            <div id="accuracy-pill" class="bg-black p-2 rounded-xl border border-zinc-800 flex items-center gap-1.5 text-zinc-400">
+                <span id="accuracy-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+                <span id="accuracy-text">GPS Idle</span>
+            </div>
+            <div id="rate-pill" class="bg-black p-2 rounded-xl border border-zinc-800 flex items-center justify-between text-zinc-400">
+                <span>Rate:</span>
+                <span id="rate-text" class="text-white font-bold">0 Hz</span>
             </div>
         </div>
     </section>
 
-    <!-- Telemetry Live Stream Status Card -->
+    <!-- Telemetry Live Stream Diagnostics Card -->
     <section id="live-stream-card" class="hidden bg-zinc-900 border border-green-500/50 p-4 rounded-3xl space-y-2.5 shadow-[0_0_20px_rgba(77,224,130,0.15)]">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-green-400 animate-ping"></span>
-                <span data-i18n="driver_gps_live" class="text-xs font-extrabold text-green-400 font-mono uppercase tracking-wider">GPS Telemetry: LIVE</span>
+                <span data-i18n="driver_gps_live" class="text-xs font-extrabold text-green-400 font-mono uppercase tracking-wider">Real GPS: BROADCASTING</span>
             </div>
-            <span data-i18n="driver_rate" class="text-xs text-zinc-400 font-mono">10 Hz Multicast</span>
+            <span id="speed-meter" class="text-xs text-white font-mono font-black bg-zinc-950 px-2.5 py-1 rounded-xl border border-zinc-800">0 km/h</span>
         </div>
         <div class="grid grid-cols-2 gap-2.5 text-xs font-mono">
-            <div class="bg-black p-2.5 rounded-2xl border border-zinc-800">LAT: <span id="telemetry-lat" class="text-green-400 font-bold text-sm">30.1290° N</span></div>
-            <div class="bg-black p-2.5 rounded-2xl border border-zinc-800">LNG: <span id="telemetry-lng" class="text-green-400 font-bold text-sm">77.2674° E</span></div>
+            <div class="bg-black p-2.5 rounded-2xl border border-zinc-800">LAT: <span id="telemetry-lat" class="text-green-400 font-bold text-sm">--</span></div>
+            <div class="bg-black p-2.5 rounded-2xl border border-zinc-800">LNG: <span id="telemetry-lng" class="text-green-400 font-bold text-sm">--</span></div>
         </div>
         <div class="flex items-center justify-between text-xs text-zinc-300 pt-1">
             <span><span data-i18n="driver_dispatched">Packets Dispatched:</span> <b id="telemetry-packets" class="text-white font-mono font-black text-sm">0</b></span>
@@ -147,22 +126,28 @@
         </div>
     </section>
 
-    <!-- Primary Action: Broadcast Toggle Button (Standardized h-16) -->
+    <!-- GPS Error Banner (Hidden by default) -->
+    <div id="gps-error-banner" class="hidden bg-red-950/70 border border-red-800 p-3.5 rounded-2xl text-xs text-red-300 font-medium flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-[20px] text-red-400 shrink-0">location_off</span>
+        <span id="gps-error-text">GPS location unavailable. Please grant browser permissions.</span>
+    </div>
+
+    <!-- Primary Action: Broadcast Toggle Button (h-16) -->
     <section class="flex flex-col gap-2.5">
         <button id="btn-broadcast-toggle" class="w-full h-16 bg-green-400 text-black font-black text-base rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-[0_0_25px_rgba(77,224,130,0.35)] tracking-wider hover:bg-[#48ff26] cursor-pointer">
             <span class="material-symbols-outlined text-[26px]">sensors</span>
             <span id="broadcast-btn-text" data-i18n="driver_btn_start">START LIVE BROADCAST</span>
         </button>
 
-        <!-- 1-Click Evaluation Demo Route Mode Button -->
-        <button id="btn-eval-simulation" class="w-full h-14 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-blue-400/40">
-            <span class="material-symbols-outlined text-[22px] text-blue-200">smart_toy</span>
-            <span id="eval-sim-btn-text" data-i18n="driver_demo_btn">🎮 Evaluation Demo Route (Auto-Simulate GPS)</span>
+        <!-- Route Recording Mode Button -->
+        <button id="btn-record-route" class="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer">
+            <span class="material-symbols-outlined text-[20px] text-primary">add_road</span>
+            <span id="record-btn-text" data-i18n="driver_btn_record_route">📍 Record New Route</span>
         </button>
     </section>
 
     <!-- Incident & Delay Reporting Grid (h-16 Buttons) -->
-    <section class="flex flex-col gap-3 bg-zinc-900 p-4.5 rounded-3xl border border-zinc-800">
+    <section class="flex flex-col gap-3 bg-zinc-900 p-4 rounded-3xl border border-zinc-800">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-zinc-200">
                 <span class="material-symbols-outlined text-[20px] text-yellow-400">warning</span>
@@ -173,21 +158,21 @@
             </span>
         </div>
         
-        <div class="grid grid-cols-2 gap-3">
-            <button class="btn-delay-trigger h-16 bg-amber-950/30 hover:bg-amber-900/50 border border-amber-500/50 text-amber-400 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer" data-delay="5" data-reason="Heavy Traffic">
-                <span class="material-symbols-outlined text-[20px]">traffic</span>
+        <div class="grid grid-cols-2 gap-2.5">
+            <button class="btn-delay-trigger h-14 bg-amber-950/30 hover:bg-amber-900/50 border border-amber-500/50 text-amber-400 rounded-2xl font-black text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer" data-delay="5" data-reason="Heavy Traffic">
+                <span class="material-symbols-outlined text-[18px]">traffic</span>
                 <span data-i18n="driver_delay_5">+5 Mins</span>
             </button>
-            <button class="btn-delay-trigger h-16 bg-orange-950/30 hover:bg-orange-900/50 border border-orange-500/50 text-orange-400 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer" data-delay="10" data-reason="Route Detour">
-                <span class="material-symbols-outlined text-[20px]">alt_route</span>
+            <button class="btn-delay-trigger h-14 bg-orange-950/30 hover:bg-orange-900/50 border border-orange-500/50 text-orange-400 rounded-2xl font-black text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer" data-delay="10" data-reason="Route Detour">
+                <span class="material-symbols-outlined text-[18px]">alt_route</span>
                 <span data-i18n="driver_delay_10">+10 Mins</span>
             </button>
-            <button class="btn-delay-trigger h-16 bg-rose-950/30 hover:bg-rose-900/50 border border-rose-500/50 text-rose-400 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer" data-delay="30" data-reason="Road Obstruction">
-                <span class="material-symbols-outlined text-[20px]">car_crash</span>
+            <button class="btn-delay-trigger h-14 bg-rose-950/30 hover:bg-rose-900/50 border border-rose-500/50 text-rose-400 rounded-2xl font-black text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer" data-delay="30" data-reason="Road Obstruction">
+                <span class="material-symbols-outlined text-[18px]">car_crash</span>
                 <span data-i18n="driver_delay_30">+30 Mins</span>
             </button>
-            <button class="btn-delay-trigger h-16 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/50 text-emerald-300 rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer" data-delay="0" data-reason="Clear Delay">
-                <span class="material-symbols-outlined text-[20px]">check_circle</span>
+            <button class="btn-delay-trigger h-14 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/50 text-emerald-300 rounded-2xl font-black text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer" data-delay="0" data-reason="Clear Delay">
+                <span class="material-symbols-outlined text-[18px]">check_circle</span>
                 <span data-i18n="driver_delay_clear">Clear Delay</span>
             </button>
         </div>
@@ -201,175 +186,352 @@
 </div>
 </div>
 
-<!-- JavaScript: Security Route Guard & Live Telemetry Engine -->
+<!-- Modal: Record Route Save Dialog -->
+<div id="modal-route-record" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-sm p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span class="material-symbols-outlined text-green-400 text-[20px]">route</span>
+                Route Recording Complete
+            </h3>
+            <button id="btn-close-record-modal" class="text-zinc-500 hover:text-white cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]">close</span>
+            </button>
+        </div>
+
+        <div class="space-y-2 text-xs font-mono">
+            <div class="flex justify-between text-zinc-400">
+                <span>Recorded GPS Points:</span>
+                <b id="rec-pts-count" class="text-white">0</b>
+            </div>
+            <div class="flex justify-between text-zinc-400">
+                <span>Simplified Points (RDP):</span>
+                <b id="rec-rdp-count" class="text-green-400">0</b>
+            </div>
+        </div>
+
+        <div class="space-y-1.5">
+            <label class="text-xs text-zinc-400 font-bold">Route Name</label>
+            <input id="rec-route-name" type="text" class="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white" value="Recorded Highway Corridor"/>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-2">
+            <button id="btn-export-route-json" class="h-11 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                Export JSON
+            </button>
+            <button id="btn-upload-route-server" class="h-11 bg-green-500 hover:bg-green-400 text-black rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">cloud_upload</span>
+                Save to Server
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript: Real GPS Geolocation & Telemetry Engine -->
 <script>
-/**
- * 1. Strict Authentication Route Guard
- */
-(function checkDriverAuth() {
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Verify Driver Session
     const sessionRaw = sessionStorage.getItem('busradar_driver_session');
     if (!sessionRaw) {
         window.location.href = '../otp_system/code.html';
         return;
     }
+    let session = {};
     try {
-        const session = JSON.parse(sessionRaw);
-        if (!session || !session.authenticated) {
+        session = JSON.parse(sessionRaw);
+        if (!session || !session.authenticated || !session.token) {
             sessionStorage.removeItem('busradar_driver_session');
             window.location.href = '../otp_system/code.html';
+            return;
         }
     } catch (e) {
         sessionStorage.removeItem('busradar_driver_session');
         window.location.href = '../otp_system/code.html';
-    }
-})();
-
-/**
- * 2. Master State-Wide Haryana Transit Dataset
- */
-const transitLocations = [
-    // Local Corridor (Yamuna Nagar ⇄ MMDU)
-    { id: "ynr_stand", name: "Yamuna Nagar Bus Stand", subtitle: "Yamuna Nagar District", type: "City Hub", icon: "🏢" },
-    { id: "ynr_jag", name: "Jagadhri Bus Stand", subtitle: "Yamuna Nagar District", type: "City Hub", icon: "🏢" },
-    { id: "ynr_rad", name: "Radaur Bus Stand", subtitle: "Yamuna Nagar Route", type: "Town Hub", icon: "🏢" },
-    { id: "ynr_tc", name: "Thana Chappar", subtitle: "NH-344 Highway Stop", type: "Local Stop", icon: "🚏" },
-    { id: "ynr_mus", name: "Mustafabad (Saraswati Nagar)", subtitle: "Town Stop", type: "Local Stop", icon: "🚏" },
-    { id: "ynr_bar", name: "Barara Bus Stand", subtitle: "Ambala District", type: "Town Hub", icon: "🚆" },
-    { id: "ynr_mul", name: "Mullana Bus Stand", subtitle: "Ambala District", type: "Local Stop", icon: "🚏" },
-    { id: "ynr_mmdu", name: "MMDU Campus Gate", subtitle: "Mullana University Hub", type: "University Hub", icon: "🎓" },
-
-    // Ambala & Kurukshetra Region
-    { id: "hr_amb_c", name: "Ambala Cantt ISBT", subtitle: "Major Transit Hub", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_amb_cty", name: "Ambala City Bus Stand", subtitle: "Ambala District", type: "City Hub", icon: "🏢" },
-    { id: "hr_nry", name: "Naraingarh Bus Stand", subtitle: "Ambala District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_kkr_p", name: "Kurukshetra (Pipli)", subtitle: "GT Road NH-44", type: "Intercity Route", icon: "🛣️" },
-    { id: "hr_kkr_n", name: "Kurukshetra New Bus Stand", subtitle: "Sector 10, KKR", type: "City Hub", icon: "🏢" },
-    { id: "hr_peo", name: "Pehowa Bus Stand", subtitle: "Kurukshetra District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_sha", name: "Shahabad Markanda", subtitle: "GT Road NH-44", type: "Town Hub", icon: "🛣️" },
-    { id: "hr_lad", name: "Ladwa Bus Stand", subtitle: "Kurukshetra District", type: "Town Hub", icon: "🏢" },
-
-    // Karnal & Panipat Region
-    { id: "hr_kar", name: "Karnal ISBT", subtitle: "GT Road NH-44", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_ghr", name: "Gharaunda", subtitle: "Karnal District", type: "Town Hub", icon: "🛣️" },
-    { id: "hr_ass", name: "Assandh Bus Stand", subtitle: "Karnal District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_pan", name: "Panipat ISBT", subtitle: "GT Road NH-44", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_sam", name: "Samalkha", subtitle: "Panipat District", type: "Town Hub", icon: "🛣️" },
-
-    // Sonipat & Rohtak Region
-    { id: "hr_son", name: "Sonipat Bus Stand", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_goh", name: "Gohana Bus Stand", subtitle: "Sonipat District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_mur", name: "Murthal", subtitle: "GT Road NH-44", type: "Highway Stop", icon: "🛣️" },
-    { id: "hr_roh", name: "Rohtak New Bus Stand", subtitle: "Rohtak District", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_meh", name: "Meham Bus Stand", subtitle: "Rohtak District", type: "Town Hub", icon: "🏢" },
-
-    // Hisar, Sirsa & Fatehabad Region
-    { id: "hr_his", name: "Hisar ISBT", subtitle: "Hisar District", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_han", name: "Hansi Bus Stand", subtitle: "Hisar District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_sir", name: "Sirsa Bus Stand", subtitle: "Sirsa District", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_fat", name: "Fatehabad Bus Stand", subtitle: "Fatehabad District", type: "City Hub", icon: "🏢" },
-    { id: "hr_toh", name: "Tohana Bus Stand", subtitle: "Fatehabad District", type: "Town Hub", icon: "🏢" },
-
-    // Jind & Kaithal Region
-    { id: "hr_jin", name: "Jind Bus Stand", subtitle: "Jind District", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_nar", name: "Narwana Bus Stand", subtitle: "Jind District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_saf", name: "Safidon Bus Stand", subtitle: "Jind District", type: "Town Hub", icon: "🏢" },
-    { id: "hr_kai", name: "Kaithal Bus Stand", subtitle: "Kaithal District", type: "City Hub", icon: "🏢" },
-    { id: "hr_kal", name: "Kalayat Bus Stand", subtitle: "Kaithal District", type: "Town Hub", icon: "🏢" },
-
-    // Gurugram, Faridabad & South Haryana
-    { id: "hr_gur_14", name: "Gurugram Sector 14", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_gur_iff", name: "IFFCO Chowk", subtitle: "Gurugram Highway", type: "Intercity Route", icon: "🛣️" },
-    { id: "hr_far_nit", name: "Faridabad NIT Bus Stand", subtitle: "NCR Region", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_bal", name: "Ballabhgarh Bus Stand", subtitle: "Faridabad District", type: "Major ISBT", icon: "🏢" },
-    { id: "hr_pal", name: "Palwal Bus Stand", subtitle: "Palwal District", type: "City Hub", icon: "🏢" },
-    { id: "hr_rew", name: "Rewari Bus Stand", subtitle: "Rewari District", type: "City Hub", icon: "🏢" },
-    { id: "hr_bhi", name: "Bhiwani Bus Stand", subtitle: "Bhiwani District", type: "City Hub", icon: "🏢" },
-    { id: "hr_dad", name: "Charkhi Dadri", subtitle: "Charkhi Dadri District", type: "City Hub", icon: "🏢" },
-    { id: "hr_jha", name: "Jhajjar Bus Stand", subtitle: "Jhajjar District", type: "City Hub", icon: "🏢" },
-    { id: "hr_bah", name: "Bahadurgarh Bus Stand", subtitle: "Jhajjar District", type: "City Hub", icon: "🏢" },
-    { id: "hr_nuh", name: "Nuh Bus Stand", subtitle: "Mewat Region", type: "City Hub", icon: "🏢" },
-    { id: "hr_mah", name: "Mahendragarh Bus Stand", subtitle: "Mahendragarh District", type: "City Hub", icon: "🏢" },
-    { id: "hr_nrl", name: "Narnaul Bus Stand", subtitle: "Mahendragarh District", type: "City Hub", icon: "🏢" },
-
-    // Panchkula & Chandigarh (Tricity)
-    { id: "hr_pch", name: "Panchkula Sector 5", subtitle: "Tricity Region", type: "City Hub", icon: "🏢" },
-    { id: "hr_kal_p", name: "Kalka Bus Stand", subtitle: "Panchkula District", type: "City Hub", icon: "🏢" },
-    { id: "chd_43", name: "Chandigarh Sector 43", subtitle: "Tricity Gateway", type: "Major ISBT", icon: "🏢" }
-];
-
-/**
- * 3. Dynamic Telemetry Publisher & Incident Dispatcher
- */
-document.addEventListener('DOMContentLoaded', function () {
-    const sessionRaw = sessionStorage.getItem('busradar_driver_session');
-    if (sessionRaw) {
-        try {
-            const session = JSON.parse(sessionRaw);
-            const phoneEl = document.getElementById('driver-phone-display');
-            if (phoneEl && session.phone) {
-                phoneEl.textContent = `Driver: +91 ${session.phone}`;
-            }
-        } catch (e) {}
+        return;
     }
 
+    const busId = session.bus_id || 'HR-02-A-1001';
+    const driverToken = session.token;
+
+    // Update Header and Cards
+    const headerBadge = document.getElementById('driver-header-badge');
+    const plateDisplay = document.getElementById('display-bus-plate');
+    if (headerBadge) headerBadge.textContent = `Bus: ${busId}`;
+    if (plateDisplay) plateDisplay.textContent = busId;
+
+    // Logout Handler
     const logoutBtn = document.getElementById('btn-driver-logout');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function () {
-            if (confirm('End driver shift and return to login?')) {
+            if (confirm('End driver shift and logout?')) {
+                stopBroadcasting(true);
                 sessionStorage.removeItem('busradar_driver_session');
                 window.location.href = '../otp_system/code.html';
             }
         });
     }
 
+    // DOM Elements
     const broadcastBtn = document.getElementById('btn-broadcast-toggle');
     const broadcastBtnText = document.getElementById('broadcast-btn-text');
     const streamCard = document.getElementById('live-stream-card');
     const latEl = document.getElementById('telemetry-lat');
     const lngEl = document.getElementById('telemetry-lng');
     const packetsEl = document.getElementById('telemetry-packets');
-    const plateInput = document.getElementById('vehicle-plate');
-    const startStopInput = document.getElementById('start-stop');
-    const destStopInput = document.getElementById('dest-stop');
-    const depTimeInput = document.getElementById('departure-time');
-    const arrTimeInput = document.getElementById('arrival-time');
+    const speedMeter = document.getElementById('speed-meter');
+    const accuracyPill = document.getElementById('accuracy-pill');
+    const accuracyDot = document.getElementById('accuracy-dot');
+    const accuracyText = document.getElementById('accuracy-text');
+    const rateText = document.getElementById('rate-text');
+    const gpsErrorBanner = document.getElementById('gps-error-banner');
+    const gpsErrorText = document.getElementById('gps-error-text');
+
     const activeDelayBadge = document.getElementById('active-delay-badge');
     const delayNotice = document.getElementById('delay-broadcast-notice');
     const delayNoticeText = document.getElementById('delay-notice-text');
 
     let isBroadcasting = false;
     let packetCount = 0;
-    let broadcastInterval = null;
+    let sequenceNumber = 0;
     let socket = null;
+    let geoWatchId = null;
+    let wakeLock = null;
+    let lastFixTime = null;
+    let pingInterval = null;
 
+    // 2. Screen Wake Lock API
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {
+                console.warn('Wake Lock request error:', err);
+            }
+        }
+    }
+
+    async function releaseWakeLock() {
+        if (wakeLock !== null) {
+            try {
+                await wakeLock.release();
+            } catch (e) {}
+            wakeLock = null;
+        }
+    }
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && isBroadcasting) {
+            await requestWakeLock();
+        }
+    });
+
+    // 3. WebSocket Connection with Exponential Backoff
+    let reconnectDelay = 1000;
     function initWebSocket() {
-        const WS_URL = 'ws://localhost:8000/ws/telemetry';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host || 'localhost:8000';
+        const WS_URL = `${protocol}//${host}/ws/telemetry?token=${encodeURIComponent(driverToken)}&bus_id=${encodeURIComponent(busId)}`;
+
         try {
             socket = new WebSocket(WS_URL);
-            socket.onopen = () => console.log('✅ Driver Dashboard connected to WebSocket Hub');
-            socket.onerror = () => console.warn('⚠️ WebSocket disconnected, running offline telemetry mode');
-            socket.onclose = () => setTimeout(initWebSocket, 3000);
+            socket.onopen = () => {
+                reconnectDelay = 1000;
+                // Start heartbeat
+                if (pingInterval) clearInterval(pingInterval);
+                pingInterval = setInterval(() => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ event_type: "PING", timestamp: Date.now() }));
+                    }
+                }, 25000);
+            };
+            socket.onclose = (event) => {
+                if (pingInterval) clearInterval(pingInterval);
+                if (event.code === 1008) {
+                    alert('Session expired or unauthorized. Please log in again.');
+                    sessionStorage.removeItem('busradar_driver_session');
+                    window.location.href = '../otp_system/code.html';
+                    return;
+                }
+                setTimeout(initWebSocket, reconnectDelay);
+                reconnectDelay = Math.min(15000, reconnectDelay * 1.5 + Math.random() * 500);
+            };
+            socket.onerror = () => {
+                try { socket.close(); } catch (e) {}
+            };
         } catch (err) {
-            console.warn('WebSocket connect error:', err);
+            setTimeout(initWebSocket, 3000);
         }
     }
 
     initWebSocket();
 
-    // Delay Dispatcher
+    // 4. Real Geolocation Processing
+    function handlePositionUpdate(position) {
+        const coords = position.coords;
+        const now = Date.now();
+
+        // Calculate fix rate
+        if (lastFixTime) {
+            const dtSec = (now - lastFixTime) / 1000.0;
+            if (dtSec > 0) {
+                const hz = (1.0 / dtSec).toFixed(1);
+                rateText.textContent = `${hz} Hz`;
+            }
+        }
+        lastFixTime = now;
+
+        const accuracy = coords.accuracy || 10;
+        const speedKmh = coords.speed !== null && !isNaN(coords.speed) ? Math.max(0, Math.round(coords.speed * 3.6)) : 0;
+        const heading = coords.heading !== null && !isNaN(coords.heading) ? coords.heading : 0;
+
+        // Accuracy Indicator
+        if (accuracy <= 15) {
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-green-400';
+            accuracyText.textContent = `Good (±${Math.round(accuracy)}m)`;
+            accuracyPill.className = 'bg-black p-2 rounded-xl border border-green-500/40 flex items-center gap-1.5 text-green-400';
+        } else if (accuracy <= 30) {
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+            accuracyText.textContent = `Fair (±${Math.round(accuracy)}m)`;
+            accuracyPill.className = 'bg-black p-2 rounded-xl border border-amber-500/40 flex items-center gap-1.5 text-amber-400';
+        } else {
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-red-400';
+            accuracyText.textContent = `Poor (±${Math.round(accuracy)}m)`;
+            accuracyPill.className = 'bg-black p-2 rounded-xl border border-red-500/40 flex items-center gap-1.5 text-red-400';
+        }
+
+        // If recording route, push coordinates
+        if (isRecordingRoute) {
+            recordedRoutePoints.push([coords.latitude, coords.longitude]);
+        }
+
+        // Drop bad fixes > 50m from live broadcast
+        if (accuracy > 50.0) {
+            gpsErrorText.textContent = `GPS Accuracy is low (±${Math.round(accuracy)}m > 50m). Waiting for cleaner fix...`;
+            gpsErrorBanner.classList.remove('hidden');
+            return;
+        } else {
+            gpsErrorBanner.classList.add('hidden');
+        }
+
+        // Update UI
+        latEl.textContent = `${coords.latitude.toFixed(5)}° N`;
+        lngEl.textContent = `${coords.longitude.toFixed(5)}° E`;
+        speedMeter.textContent = `${speedKmh} km/h`;
+
+        packetCount++;
+        sequenceNumber++;
+        packetsEl.textContent = packetCount;
+
+        // Dispatch Telemetry packet over WebSocket
+        const packet = {
+            event_type: "DRIVER_TELEMETRY",
+            bus_id: busId,
+            lat: coords.latitude,
+            lng: coords.longitude,
+            accuracy: accuracy,
+            speed_kmh: speedKmh,
+            heading: heading,
+            sequence_number: sequenceNumber,
+            client_timestamp: now,
+            route_from: "Yamuna Nagar Stand",
+            route_to: "MMDU Campus Gate"
+        };
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify(packet));
+        }
+    }
+
+    function handlePositionError(error) {
+        let msg = 'GPS location unavailable.';
+        if (error.code === error.PERMISSION_DENIED) {
+            msg = 'Location permission denied. Please allow location access in your browser settings to broadcast bus location.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+            msg = 'Location unavailable. Ensure device GPS is active with clear sky view.';
+        } else if (error.code === error.TIMEOUT) {
+            msg = 'Location acquisition timed out. Reconnecting to GPS...';
+        }
+        gpsErrorText.textContent = msg;
+        gpsErrorBanner.classList.remove('hidden');
+    }
+
+    // 5. Broadcast Toggle Actions
+    function startBroadcasting() {
+        if (!navigator.geolocation) {
+            alert('Geolocation is not supported by your browser.');
+            return;
+        }
+        isBroadcasting = true;
+        requestWakeLock();
+        streamCard.classList.remove('hidden');
+        gpsErrorBanner.classList.add('hidden');
+        broadcastBtnText.textContent = 'END TRIP & STOP';
+        broadcastBtn.classList.remove('bg-green-400', 'text-black', 'hover:bg-[#48ff26]');
+        broadcastBtn.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500');
+
+        geoWatchId = navigator.geolocation.watchPosition(
+            handlePositionUpdate,
+            handlePositionError,
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 10000
+            }
+        );
+    }
+
+    function stopBroadcasting(isLogout = false) {
+        if (!isBroadcasting && !isLogout) return;
+        isBroadcasting = false;
+        releaseWakeLock();
+
+        if (geoWatchId !== null) {
+            navigator.geolocation.clearWatch(geoWatchId);
+            geoWatchId = null;
+        }
+
+        // Notify server that trip has ended
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                event_type: "TRIP_END",
+                bus_id: busId,
+                client_timestamp: Date.now()
+            }));
+        }
+
+        streamCard.classList.add('hidden');
+        broadcastBtnText.textContent = 'START LIVE BROADCAST';
+        broadcastBtn.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-500');
+        broadcastBtn.classList.add('bg-green-400', 'text-black', 'hover:bg-[#48ff26]');
+        accuracyDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
+        accuracyText.textContent = 'GPS Idle';
+        rateText.textContent = '0 Hz';
+    }
+
+    broadcastBtn.addEventListener('click', () => {
+        if (!isBroadcasting) {
+            startBroadcasting();
+        } else {
+            if (confirm('End active trip broadcast for commuters?')) {
+                stopBroadcasting();
+            }
+        }
+    });
+
+    // 6. Delay and Incident Reporting
     const delayButtons = document.querySelectorAll('.btn-delay-trigger');
     delayButtons.forEach(btn => {
         btn.addEventListener('click', function () {
             const delayMins = parseInt(this.getAttribute('data-delay'), 10);
             const reason = this.getAttribute('data-reason');
-            const busId = plateInput ? (plateInput.value.trim() || 'HR-02-AB-1234') : 'HR-02-AB-1234';
 
             const delayPayload = {
                 event_type: "DRIVER_DELAY",
                 bus_id: busId,
                 delay_minutes: delayMins,
                 reason: reason,
-                timestamp: Date.now()
+                client_timestamp: Date.now()
             };
 
             if (socket && socket.readyState === WebSocket.OPEN) {
@@ -380,270 +542,128 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (delayMins > 0) {
                     activeDelayBadge.textContent = `+${delayMins}M DELAY (${reason.toUpperCase()})`;
                     activeDelayBadge.className = 'px-3 py-1 rounded-xl text-xs font-mono bg-amber-950 text-amber-300 border border-amber-600 font-bold animate-pulse';
-
-                    if (delayNotice) {
-                        delayNotice.className = 'mt-1 text-xs font-mono p-3 rounded-2xl bg-amber-950/50 border border-amber-700 text-amber-200 flex items-center gap-2';
-                    }
-                    if (delayNoticeText) {
-                        delayNoticeText.textContent = `🚨 Multicasted: +${delayMins}m alert (${reason}) to waiting commuters.`;
-                    }
+                    delayNotice.className = 'mt-1 text-xs font-mono p-3 rounded-2xl bg-amber-950/50 border border-amber-700 text-amber-200 flex items-center gap-2';
+                    delayNoticeText.textContent = `🚨 Multicasted: +${delayMins}m alert (${reason}) to waiting commuters.`;
                 } else {
                     activeDelayBadge.textContent = 'ON TIME';
                     activeDelayBadge.className = 'px-3 py-1 rounded-xl text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold';
-
-                    if (delayNotice) {
-                        delayNotice.className = 'mt-1 text-xs font-mono p-3 rounded-2xl bg-emerald-950/50 border border-emerald-700 text-emerald-200 flex items-center gap-2';
-                    }
-                    if (delayNoticeText) {
-                        delayNoticeText.textContent = '✅ Delay cleared! Schedule restored to nominal ETA.';
-                    }
+                    delayNotice.className = 'mt-1 text-xs font-mono p-3 rounded-2xl bg-emerald-950/50 border border-emerald-700 text-emerald-200 flex items-center gap-2';
+                    delayNoticeText.textContent = '✅ Delay cleared! Schedule restored to nominal ETA.';
                 }
-                if (delayNotice) delayNotice.classList.remove('hidden');
+                delayNotice.classList.remove('hidden');
             }
         });
     });
 
-    // GPS Broadcast Streamer
-    let baseLat = 30.1290;
-    let baseLng = 77.2674;
-    let stepIndex = 0;
+    // 7. Route Recording Engine (RDP Simplification & Export)
+    let isRecordingRoute = false;
+    let recordedRoutePoints = [];
+    const recordBtn = document.getElementById('btn-record-route');
+    const recordBtnText = document.getElementById('record-btn-text');
+    const recordModal = document.getElementById('modal-route-record');
+    const recPtsCount = document.getElementById('rec-pts-count');
+    const recRdpCount = document.getElementById('rec-rdp-count');
+    const recRouteName = document.getElementById('rec-route-name');
+    const btnExportJson = document.getElementById('btn-export-route-json');
+    const btnUploadServer = document.getElementById('btn-upload-route-server');
+    const btnCloseRecordModal = document.getElementById('btn-close-record-modal');
 
-    if (broadcastBtn) {
-        broadcastBtn.addEventListener('click', function () {
+    // Client-side Ramer-Douglas-Peucker
+    function rdpSimplify(points, epsilon = 0.00005) {
+        if (points.length < 3) return points;
+        let dmax = 0, index = 0, end = points.length - 1;
+        const x1 = points[0][1], y1 = points[0][0];
+        const x2 = points[end][1], y2 = points[end][0];
+        const lineLen = Math.hypot(x2 - x1, y2 - y1);
+
+        for (let i = 1; i < end; i++) {
+            const px = points[i][1], py = points[i][0];
+            const d = lineLen === 0 ? Math.hypot(px - x1, py - y1) :
+                Math.abs((y2 - y1) * px - (x2 - x1) * py + x2 * y1 - y2 * x1) / lineLen;
+            if (d > dmax) { dmax = d; index = i; }
+        }
+        if (dmax > epsilon) {
+            const rec1 = rdpSimplify(points.slice(0, index + 1), epsilon);
+            const rec2 = rdpSimplify(points.slice(index), epsilon);
+            return rec1.slice(0, -1).concat(rec2);
+        } else {
+            return [points[0], points[end]];
+        }
+    }
+
+    let simplifiedPoints = [];
+
+    recordBtn.addEventListener('click', () => {
+        if (!isRecordingRoute) {
+            isRecordingRoute = true;
+            recordedRoutePoints = [];
+            recordBtn.className = 'w-full h-12 bg-amber-900/60 hover:bg-amber-900 text-amber-200 border border-amber-600 font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer animate-pulse';
+            recordBtnText.textContent = '⏹️ Recording Route... (Tap to Finish)';
             if (!isBroadcasting) {
-                isBroadcasting = true;
-                if (streamCard) streamCard.classList.remove('hidden');
-                if (broadcastBtnText) broadcastBtnText.textContent = 'STOP BROADCASTING';
-                broadcastBtn.classList.remove('bg-green-400', 'text-black', 'hover:bg-[#48ff26]', 'shadow-[0_0_25px_rgba(77,224,130,0.35)]');
-                broadcastBtn.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-[0_0_25px_rgba(239,68,68,0.35)]');
-
-                broadcastInterval = setInterval(() => {
-                    packetCount++;
-                    if (packetsEl) packetsEl.textContent = packetCount;
-
-                    stepIndex++;
-                    const latJitter = parseFloat((baseLat + (stepIndex * 0.0004) % 0.015 + (Math.random() - 0.5) * 0.0006).toFixed(4));
-                    const lngJitter = parseFloat((baseLng + (stepIndex * 0.0005) % 0.018 + (Math.random() - 0.5) * 0.0006).toFixed(4));
-                    const speed = Math.floor(40 + (Math.random() - 0.5) * 10);
-                    
-                    const busId = plateInput ? (plateInput.value.trim() || 'HR-02-AB-1234') : 'HR-02-AB-1234';
-                    const routeFrom = startStopInput ? (startStopInput.value.trim() || 'Yamuna Nagar Bus Stand') : 'Yamuna Nagar Bus Stand';
-                    const routeTo = destStopInput ? (destStopInput.value.trim() || 'MMDU Campus Gate') : 'MMDU Campus Gate';
-                    const depTime = depTimeInput ? (depTimeInput.value.trim() || '08:30') : '08:30';
-                    const arrTime = arrTimeInput ? (arrTimeInput.value.trim() || '09:15') : '09:15';
-
-                    if (latEl) latEl.textContent = `${latJitter}° N`;
-                    if (lngEl) lngEl.textContent = `${lngJitter}° E`;
-
-                    const payload = {
-                        event_type: "DRIVER_TELEMETRY",
-                        bus_id: busId,
-                        route_from: routeFrom,
-                        route_to: routeTo,
-                        departure_time: depTime,
-                        arrival_time: arrTime,
-                        lat: latJitter,
-                        lng: lngJitter,
-                        speed_kmh: speed,
-                        timestamp: Date.now()
-                    };
-
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify(payload));
-                    }
-                }, 1000);
-            } else {
-                isBroadcasting = false;
-                clearInterval(broadcastInterval);
-                if (streamCard) streamCard.classList.add('hidden');
-                const savedLang = localStorage.getItem('busradar_lang') || 'en';
-                const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
-                if (broadcastBtnText) broadcastBtnText.textContent = dict["driver_btn_start"] || 'START LIVE BROADCAST';
-                broadcastBtn.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-500', 'shadow-[0_0_25px_rgba(239,68,68,0.35)]');
-                broadcastBtn.classList.add('bg-green-400', 'text-black', 'hover:bg-[#48ff26]', 'shadow-[0_0_25px_rgba(77,224,130,0.35)]');
+                // Start GPS watch if not already broadcasting
+                geoWatchId = navigator.geolocation.watchPosition(handlePositionUpdate, handlePositionError, {
+                    enableHighAccuracy: true, maximumAge: 0, timeout: 10000
+                });
             }
-        });
-    }
+        } else {
+            isRecordingRoute = false;
+            recordBtn.className = 'w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer';
+            recordBtnText.textContent = '📍 Record New Route';
 
-    // Evaluation Highway Route Simulation Engine
-    const evalHighwayRoute = [
-        [30.1290, 77.2674], // Yamuna Nagar Bus Stand
-        [30.1340, 77.2750],
-        [30.1435, 77.2880], // Jagadhri Bus Stand
-        [30.1550, 77.2750],
-        [30.1650, 77.2600], // Kalanaur Chowk
-        [30.1780, 77.2350],
-        [30.1900, 77.2100], // Mustafabad Hub
-        [30.2050, 77.1700],
-        [30.2200, 77.1300], // Barara Junction
-        [30.2350, 77.0950],
-        [30.2450, 77.0650], // Mullana Town
-        [30.2520, 77.0470]  // MMDU Campus Gate
-    ];
-
-    function generateEvalSteps(waypoints, stepsPerSegment = 12) {
-        const dense = [];
-        for (let i = 0; i < waypoints.length - 1; i++) {
-            const start = waypoints[i];
-            const end = waypoints[i + 1];
-            for (let s = 0; s < stepsPerSegment; s++) {
-                const frac = s / stepsPerSegment;
-                const lat = start[0] + (end[0] - start[0]) * frac;
-                const lng = start[1] + (end[1] - start[1]) * frac;
-                dense.push([parseFloat(lat.toFixed(5)), parseFloat(lng.toFixed(5))]);
-            }
+            simplifiedPoints = rdpSimplify(recordedRoutePoints, 0.00005);
+            recPtsCount.textContent = recordedRoutePoints.length;
+            recRdpCount.textContent = simplifiedPoints.length;
+            recordModal.classList.remove('hidden');
         }
-        dense.push(waypoints[waypoints.length - 1]);
-        return dense;
-    }
-
-    const evalDenseRoute = generateEvalSteps(evalHighwayRoute, 12);
-    let evalStepIndex = 0;
-    let isEvalSimActive = false;
-    let evalSimInterval = null;
-
-    const evalSimBtn = document.getElementById('btn-eval-simulation');
-    const evalSimBtnText = document.getElementById('eval-sim-btn-text');
-
-    if (evalSimBtn) {
-        evalSimBtn.addEventListener('click', function () {
-            const savedLang = localStorage.getItem('busradar_lang') || 'en';
-            const dict = (typeof BUSRADAR_I18N !== 'undefined' && BUSRADAR_I18N[savedLang]) ? BUSRADAR_I18N[savedLang] : {};
-
-            if (!isEvalSimActive) {
-                isEvalSimActive = true;
-                
-                // Populate preset route fields
-                if (plateInput) plateInput.value = 'HR-02-AB-1234';
-                if (startStopInput) startStopInput.value = 'Yamuna Nagar Bus Stand';
-                if (destStopInput) destStopInput.value = 'MMDU Campus Gate';
-                if (depTimeInput) depTimeInput.value = '08:30';
-                if (arrTimeInput) arrTimeInput.value = '09:15';
-
-                if (streamCard) streamCard.classList.remove('hidden');
-                evalSimBtnText.textContent = dict["driver_demo_active"] || '🛑 Stop Demo Route Simulation';
-                evalSimBtn.className = 'w-full h-14 bg-gradient-to-r from-rose-700 to-red-700 hover:from-rose-600 hover:to-red-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-red-400/40 animate-pulse';
-
-                // Stop standard broadcast if active
-                if (isBroadcasting) {
-                    isBroadcasting = false;
-                    clearInterval(broadcastInterval);
-                    if (broadcastBtnText) broadcastBtnText.textContent = dict["driver_btn_start"] || 'START LIVE BROADCAST';
-                    broadcastBtn.classList.remove('bg-red-600', 'text-white');
-                    broadcastBtn.classList.add('bg-green-400', 'text-black');
-                }
-
-                evalSimInterval = setInterval(() => {
-                    packetCount++;
-                    if (packetsEl) packetsEl.textContent = packetCount;
-
-                    evalStepIndex = (evalStepIndex + 1) % evalDenseRoute.length;
-                    const coord = evalDenseRoute[evalStepIndex];
-                    const speed = Math.floor(40 + Math.sin(evalStepIndex * 0.2) * 5);
-
-                    if (latEl) latEl.textContent = `${coord[0]}° N`;
-                    if (lngEl) lngEl.textContent = `${coord[1]}° E`;
-
-                    const payload = {
-                        event_type: "DRIVER_TELEMETRY",
-                        bus_id: "HR-02-AB-1234",
-                        route_from: "Yamuna Nagar Bus Stand",
-                        route_to: "MMDU Campus Gate",
-                        departure_time: "08:30",
-                        arrival_time: "09:15",
-                        lat: coord[0],
-                        lng: coord[1],
-                        speed_kmh: speed,
-                        timestamp: Date.now()
-                    };
-
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify(payload));
-                    }
-                }, 1000);
-            } else {
-                isEvalSimActive = false;
-                clearInterval(evalSimInterval);
-                evalSimBtnText.textContent = dict["driver_demo_btn"] || '🎮 Evaluation Demo Route (Auto-Simulate GPS)';
-                evalSimBtn.className = 'w-full h-14 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white font-extrabold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-lg cursor-pointer border border-blue-400/40';
-            }
-        });
-    }
-
-    // Driver Autocomplete Combobox Engine (Enhanced Spacing)
-    const fuse = new Fuse(transitLocations, {
-        keys: ['name', 'subtitle', 'type'],
-        threshold: 0.35,
-        distance: 100,
-        minMatchCharLength: 1
     });
 
-    function setupDriverCombobox(inputId, clearBtnId, dropdownId) {
-        const input = document.getElementById(inputId);
-        const clearBtn = document.getElementById(clearBtnId);
-        const dropdown = document.getElementById(dropdownId);
+    btnCloseRecordModal.addEventListener('click', () => recordModal.classList.add('hidden'));
 
-        function renderResults(results) {
-            if (!results.length) {
-                dropdown.innerHTML = `
-                    <div class="px-4 py-3 text-xs text-zinc-500 text-center flex items-center justify-center gap-2">
-                        <span class="material-symbols-outlined text-[18px]">search_off</span>
-                        <span>No stop found in Haryana DB.</span>
-                    </div>
-                `;
-                dropdown.classList.remove('hidden');
-                return;
-            }
+    btnExportJson.addEventListener('click', () => {
+        const routeData = {
+            route_id: `rec_route_${Date.now()}`,
+            route_name: recRouteName.value.trim() || "Recorded Route",
+            total_nodes: simplifiedPoints.length,
+            polyline: simplifiedPoints,
+            recorded_at_iso: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(routeData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `route_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
 
-            dropdown.innerHTML = results.map(({ item }) => `
-                <div class="combobox-item px-4 py-3 hover:bg-zinc-900 transition-colors cursor-pointer w-full group" data-name="${item.name}">
-                    <div class="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate">${item.name}</div>
-                    <div class="text-[11px] font-medium text-zinc-400 truncate mt-0.5">${item.subtitle}</div>
-                </div>
-            `).join('');
-
-            dropdown.classList.remove('hidden');
-
-            dropdown.querySelectorAll('.combobox-item').forEach(el => {
-                el.addEventListener('click', function () {
-                    const selectedName = this.getAttribute('data-name');
-                    input.value = selectedName;
-                    dropdown.classList.add('hidden');
-                    clearBtn.classList.remove('hidden');
-                });
+    btnUploadServer.addEventListener('click', async () => {
+        const routeId = `route_${Date.now().toString(36)}`;
+        try {
+            const res = await fetch('/api/routes/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Driver-Token': driverToken
+                },
+                body: JSON.stringify({
+                    route_id: routeId,
+                    route_name: recRouteName.value.trim() || "Recorded Corridor",
+                    corridor: "Custom Highway Corridor",
+                    polyline: simplifiedPoints
+                })
             });
-        }
-
-        input.addEventListener('input', function () {
-            const query = this.value.trim();
-            if (query.length > 0) {
-                clearBtn.classList.remove('hidden');
-                renderResults(fuse.search(query));
+            if (res.ok) {
+                alert('Route successfully saved to server!');
+                recordModal.classList.add('hidden');
             } else {
-                clearBtn.classList.add('hidden');
-                dropdown.classList.add('hidden');
+                alert('Failed to save route to server.');
             }
-        });
-
-        clearBtn.addEventListener('click', function () {
-            input.value = '';
-            clearBtn.classList.add('hidden');
-            dropdown.classList.add('hidden');
-            input.focus();
-        });
-
-        document.addEventListener('click', function (e) {
-            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.classList.add('hidden');
-            }
-        });
-    }
-
-    setupDriverCombobox('start-stop', 'btn-clear-start', 'start-stop-dropdown');
-    setupDriverCombobox('dest-stop', 'btn-clear-dest', 'dest-stop-dropdown');
+        } catch (e) {
+            alert('Network error saving route.');
+        }
+    });
 });
 </script>
-<!-- Universal i18n Engine Script -->
 <script src="../i18n.js"></script>
 </body>
 </html>

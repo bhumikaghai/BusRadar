@@ -2,5 +2,16 @@ services:
   - type: web
     name: busradar
     env: python
+    plan: free
+    region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: DRIVER_SIGNING_SECRET
+        generateValue: true
+      - key: ADMIN_PASSCODE
+        value: BusRadarAdmin2024!
+      - key: ALLOWED_ORIGIN
+        value: "*"

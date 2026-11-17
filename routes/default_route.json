@@ -1,0 +1,92 @@
+{
+  "route_id": "ynr_mmdu_sh4",
+  "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate",
+  "corridor": "Haryana State Highway 4 (NH-344)",
+  "origin": "Yamuna Nagar Bus Stand",
+  "destination": "MMDU Campus Gate, Mullana",
+  "total_distance_km": 28.4,
+  "nominal_duration_mins": 45,
+  "stops": [
+    {
+      "id": "stop_1",
+      "name": "Yamuna Nagar Bus Stand",
+      "name_hi": "यमुनानगर बस स्टैंड",
+      "coords": [30.1290, 77.2674],
+      "sequence": 1,
+      "distance_from_start_km": 0.0
+    },
+    {
+      "id": "stop_2",
+      "name": "Jagadhri Bus Stand",
+      "name_hi": "जगाधरी बस स्टैंड",
+      "coords": [30.1435, 77.2880],
+      "sequence": 2,
+      "distance_from_start_km": 3.2
+    },
+    {
+      "id": "stop_3",
+      "name": "Kalanaur Chowk",
+      "name_hi": "कलानौर चौक",
+      "coords": [30.1650, 77.2600],
+      "sequence": 3,
+      "distance_from_start_km": 7.5
+    },
+    {
+      "id": "stop_4",
+      "name": "Mustafabad (Saraswati Nagar)",
+      "name_hi": "मुस्तफ़ाबाद (सरस्वती नगर)",
+      "coords": [30.1900, 77.2100],
+      "sequence": 4,
+      "distance_from_start_km": 14.1
+    },
+    {
+      "id": "stop_5",
+      "name": "Barara Junction Stand",
+      "name_hi": "बराड़ा जंक्शन स्टैंड",
+      "coords": [30.2200, 77.1300],
+      "sequence": 5,
+      "distance_from_start_km": 21.8
+    },
+    {
+      "id": "stop_6",
+      "name": "Mullana Town Stand",
+      "name_hi": "मुल्लाना टाउन स्टैंड",
+      "coords": [30.2450, 77.0650],
+      "sequence": 6,
+      "distance_from_start_km": 26.5
+    },
+    {
+      "id": "stop_7",
+      "name": "MMDU Campus Gate",
+      "name_hi": "एमएमडीयू कैंपस गेट",
+      "coords": [30.2520, 77.0470],
+      "sequence": 7,
+      "distance_from_start_km": 28.4
+    }
+  ],
+  "polyline": [
+    [30.1290, 77.2674],
+    [30.1315, 77.2710],
+    [30.1350, 77.2765],
+    [30.1390, 77.2820],
+    [30.1435, 77.2880],
+    [30.1480, 77.2840],
+    [30.1530, 77.2780],
+    [30.1585, 77.2710],
+    [30.1650, 77.2600],
+    [30.1710, 77.2480],
+    [30.1780, 77.2350],
+    [30.1840, 77.2220],
+    [30.1900, 77.2100],
+    [30.1970, 77.1950],
+    [30.2050, 77.1700],
+    [30.2120, 77.1510],
+    [30.2200, 77.1300],
+    [30.2270, 77.1120],
+    [30.2350, 77.0950],
+    [30.2400, 77.0800],
+    [30.2450, 77.0650],
+    [30.2485, 77.0560],
+    [30.2520, 77.0470]
+  ]
+}
