@@ -222,15 +222,25 @@ Where:
 
 ---
 
-## 6. Automated Testing Verification (27/27 Tests Passed)
+## 6. Automated Testing Verification (31/31 Tests Passed)
 
-All 27 automated tests executed and verified:
-* **Authentication Suite:** Valid PIN, invalid PIN rejection, 5-attempt lockout, admin bus registration.
-* **Geospatial & Telemetry Suite:** Coordinate bounding boxes, impossible velocity jump rejection, accuracy filtering (>50m drop), XSS neutralization, Haversine accuracy, polyline snapping.
-* **WebSocket Engine Suite:** Read-only passenger enforcement, token validation, concurrent multicast broadcast, ping/pong heartbeat, oversized packet drop.
+All 31 automated tests executed and verified:
+* **Authentication Suite (4 tests):** Valid PIN, invalid PIN rejection, 5-attempt lockout, admin bus registration.
+* **Geospatial & Telemetry Suite (7 tests):** Coordinate bounding boxes, impossible velocity jump rejection, accuracy filtering (>50m drop), XSS neutralization, delay validation, Haversine accuracy, polyline snapping.
+* **WebSocket Engine Suite (7 tests):** Read-only passenger enforcement, token validation, authorized driver multicast broadcast, ping/pong heartbeat, bad accuracy drop, oversized packet drop.
+* **Simulation Guard Suite (4 tests):** Default server simulation disabled (`SIMULATION_ENABLED=false`), fleet starts empty with 0 active trips, passenger WebSocket snapshot contains 0 ghost buses, static frontend audit proves zero unattended simulation loops on page load.
 * **High Concurrency Benchmark:** 500 packets across 100 concurrent subscribers completed in **9.67 ms** (51,696 msgs/sec throughput, +0.19 MB memory delta).
 
 *(Detailed test execution matrix available in [TEST_REPORT.md](TEST_REPORT.md))*
+
+---
+
+## 7. Real-Only Telemetry Architecture & Simulation Gating
+
+To guarantee academic and operational integrity:
+1. **Default Live Mode:** The bus marker moves **exclusively** when real GPS telemetry arrives from an authenticated driver's smartphone via `navigator.geolocation.watchPosition` (`enableHighAccuracy: true`).
+2. **Empty State on Load:** When no driver is broadcasting, the passenger map displays `WAITING FOR DRIVER` / `Waiting for live GPS`. No ghost bus appears, and no coordinates move.
+3. **Simulation Gating:** Any demo/indoor simulation is **OFF by default** on page load. It requires explicit user activation via a dedicated button (`[Demo Simulation]`), prompts a confirmation dialog, and displays a persistent high-visibility purple warning banner: `⚠️ SIMULATION MODE ACTIVE (NOT REAL GPS)` on all screens.
 
 ---
 *© Team LogiCode | Smart India Hackathon (SIH 2024 / SIH26205) | Production v2.0*

@@ -97,10 +97,14 @@
                 <span id="accuracy-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
                 <span id="accuracy-text">GPS Idle</span>
             </div>
-            <div id="rate-pill" class="bg-black p-2 rounded-xl border border-zinc-800 flex items-center justify-between text-zinc-400">
-                <span>Rate:</span>
-                <span id="rate-text" class="text-white font-bold">0 Hz</span>
+            <div id="ws-pill" class="bg-black p-2 rounded-xl border border-zinc-800 flex items-center justify-between text-zinc-400">
+                <span id="ws-status-text">Hub: Connecting...</span>
+                <span id="ws-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
             </div>
+        </div>
+        <div class="flex items-center justify-between px-1 text-[11px] font-mono text-zinc-400">
+            <span>Fix Rate: <b id="rate-text" class="text-white">0 Hz</b></span>
+            <span>Screen Lock: <b id="wakelock-status" class="text-zinc-500">Normal</b></span>
         </div>
     </section>
 
@@ -108,8 +112,8 @@
     <section id="live-stream-card" class="hidden bg-zinc-900 border border-green-500/50 p-4 rounded-3xl space-y-2.5 shadow-[0_0_20px_rgba(77,224,130,0.15)]">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full bg-green-400 animate-ping"></span>
-                <span data-i18n="driver_gps_live" class="text-xs font-extrabold text-green-400 font-mono uppercase tracking-wider">Real GPS: BROADCASTING</span>
+                <span id="stream-status-dot" class="w-3 h-3 rounded-full bg-green-400 animate-ping"></span>
+                <span id="stream-status-label" data-i18n="driver_gps_live" class="text-xs font-extrabold text-green-400 font-mono uppercase tracking-wider">Broadcasting live GPS</span>
             </div>
             <span id="speed-meter" class="text-xs text-white font-mono font-black bg-zinc-950 px-2.5 py-1 rounded-xl border border-zinc-800">0 km/h</span>
         </div>
@@ -129,7 +133,7 @@
     <!-- GPS Error Banner (Hidden by default) -->
     <div id="gps-error-banner" class="hidden bg-red-950/70 border border-red-800 p-3.5 rounded-2xl text-xs text-red-300 font-medium flex items-center gap-2.5">
         <span class="material-symbols-outlined text-[20px] text-red-400 shrink-0">location_off</span>
-        <span id="gps-error-text">GPS location unavailable. Please grant browser permissions.</span>
+        <span id="gps-error-text">Location permission required. Please grant browser permissions.</span>
     </div>
 
     <!-- Primary Action: Broadcast Toggle Button (h-16) -->
@@ -137,6 +141,12 @@
         <button id="btn-broadcast-toggle" class="w-full h-16 bg-green-400 text-black font-black text-base rounded-2xl flex items-center justify-center gap-2.5 active:scale-95 transition-all shadow-[0_0_25px_rgba(77,224,130,0.35)] tracking-wider hover:bg-[#48ff26] cursor-pointer">
             <span class="material-symbols-outlined text-[26px]">sensors</span>
             <span id="broadcast-btn-text" data-i18n="driver_btn_start">START LIVE BROADCAST</span>
+        </button>
+
+        <!-- Indoor Evaluation Simulation Mode Button (OFF by default) -->
+        <button id="btn-eval-sim" type="button" class="w-full h-11 bg-zinc-900 hover:bg-purple-950/40 text-zinc-400 hover:text-purple-300 border border-zinc-800 hover:border-purple-800 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer">
+            <span class="material-symbols-outlined text-[17px]">smart_toy</span>
+            <span id="eval-sim-text">Indoor Demo Simulation: OFF</span>
         </button>
 
         <!-- Route Recording Mode Button -->
@@ -305,6 +315,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if ('wakeLock' in navigator) {
             try {
                 wakeLock = await navigator.wakeLock.request('screen');
+                const wlStatus = document.getElementById('wakelock-status');
+                if (wlStatus) {
+                    wlStatus.textContent = 'Active (Screen On)';
+                    wlStatus.className = 'text-green-400 font-bold';
+                }
             } catch (err) {
                 console.warn('Wake Lock request error:', err);
             }
@@ -317,6 +332,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 await wakeLock.release();
             } catch (e) {}
             wakeLock = null;
+        }
+        const wlStatus = document.getElementById('wakelock-status');
+        if (wlStatus) {
+            wlStatus.textContent = 'Normal';
+            wlStatus.className = 'text-zinc-500';
         }
     }
 
@@ -337,6 +357,13 @@ document.addEventListener('DOMContentLoaded', function () {
             socket = new WebSocket(WS_URL);
             socket.onopen = () => {
                 reconnectDelay = 1000;
+                const wsText = document.getElementById('ws-status-text');
+                const wsDot = document.getElementById('ws-status-dot');
+                const wsPill = document.getElementById('ws-pill');
+                if (wsText) wsText.textContent = 'Hub: Connected';
+                if (wsDot) wsDot.className = 'w-2 h-2 rounded-full bg-green-400';
+                if (wsPill) wsPill.className = 'bg-black p-2 rounded-xl border border-green-500/40 flex items-center justify-between text-green-400';
+
                 // Start heartbeat
                 if (pingInterval) clearInterval(pingInterval);
                 pingInterval = setInterval(() => {
@@ -347,6 +374,13 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             socket.onclose = (event) => {
                 if (pingInterval) clearInterval(pingInterval);
+                const wsText = document.getElementById('ws-status-text');
+                const wsDot = document.getElementById('ws-status-dot');
+                const wsPill = document.getElementById('ws-pill');
+                if (wsText) wsText.textContent = 'WebSocket disconnected';
+                if (wsDot) wsDot.className = 'w-2 h-2 rounded-full bg-red-400 animate-ping';
+                if (wsPill) wsPill.className = 'bg-black p-2 rounded-xl border border-red-500/50 flex items-center justify-between text-red-400';
+
                 if (event.code === 1008) {
                     alert('Session expired or unauthorized. Please log in again.');
                     sessionStorage.removeItem('busradar_driver_session');
@@ -446,11 +480,19 @@ document.addEventListener('DOMContentLoaded', function () {
     function handlePositionError(error) {
         let msg = 'GPS location unavailable.';
         if (error.code === error.PERMISSION_DENIED) {
-            msg = 'Location permission denied. Please allow location access in your browser settings to broadcast bus location.';
+            msg = 'Location permission required: Please tap the lock/settings icon in your browser address bar and grant Location access to broadcast bus location.';
+            accuracyText.textContent = 'Location permission required';
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-red-500 animate-pulse';
+            accuracyPill.className = 'bg-black p-2 rounded-xl border border-red-500/60 flex items-center gap-1.5 text-red-400 font-bold';
         } else if (error.code === error.POSITION_UNAVAILABLE) {
-            msg = 'Location unavailable. Ensure device GPS is active with clear sky view.';
+            msg = 'Location unavailable: Ensure device GPS is active with clear sky view.';
+            accuracyText.textContent = 'GPS Signal Lost';
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+            accuracyPill.className = 'bg-black p-2 rounded-xl border border-amber-500/60 flex items-center gap-1.5 text-amber-400 font-bold';
         } else if (error.code === error.TIMEOUT) {
             msg = 'Location acquisition timed out. Reconnecting to GPS...';
+            accuracyText.textContent = 'GPS Timeout';
+            accuracyDot.className = 'w-2 h-2 rounded-full bg-amber-500';
         }
         gpsErrorText.textContent = msg;
         gpsErrorBanner.classList.remove('hidden');
@@ -462,10 +504,14 @@ document.addEventListener('DOMContentLoaded', function () {
             alert('Geolocation is not supported by your browser.');
             return;
         }
+        if (isEvalSimActive) stopEvalSimulation();
         isBroadcasting = true;
         requestWakeLock();
         streamCard.classList.remove('hidden');
         gpsErrorBanner.classList.add('hidden');
+        accuracyText.textContent = 'Broadcasting live GPS';
+        accuracyDot.className = 'w-2 h-2 rounded-full bg-green-400';
+        accuracyPill.className = 'bg-black p-2 rounded-xl border border-green-500/40 flex items-center gap-1.5 text-green-400';
         broadcastBtnText.textContent = 'END TRIP & STOP';
         broadcastBtn.classList.remove('bg-green-400', 'text-black', 'hover:bg-[#48ff26]');
         broadcastBtn.classList.add('bg-red-600', 'text-white', 'hover:bg-red-500');
@@ -506,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function () {
         broadcastBtn.classList.add('bg-green-400', 'text-black', 'hover:bg-[#48ff26]');
         accuracyDot.className = 'w-2 h-2 rounded-full bg-zinc-600';
         accuracyText.textContent = 'GPS Idle';
+        accuracyPill.className = 'bg-black p-2 rounded-xl border border-zinc-800 flex items-center gap-1.5 text-zinc-400';
         rateText.textContent = '0 Hz';
     }
 
@@ -662,6 +709,102 @@ document.addEventListener('DOMContentLoaded', function () {
             alert('Network error saving route.');
         }
     });
+
+    // 8. Explicit Indoor Simulation Engine (OFF BY DEFAULT)
+    let isEvalSimActive = false;
+    let evalSimInterval = null;
+    let evalStepIndex = 0;
+    const evalCoordinates = [
+        [30.1290, 77.2674], [30.1315, 77.2710], [30.1350, 77.2765],
+        [30.1390, 77.2820], [30.1435, 77.2880], [30.1480, 77.2840],
+        [30.1530, 77.2780], [30.1585, 77.2710], [30.1650, 77.2600],
+        [30.1710, 77.2480], [30.1780, 77.2350], [30.1840, 77.2220],
+        [30.1900, 77.2100], [30.1970, 77.1950], [30.2050, 77.1700],
+        [30.2120, 77.1510], [30.2200, 77.1300], [30.2270, 77.1120],
+        [30.2350, 77.0950], [30.2400, 77.0800], [30.2450, 77.0650],
+        [30.2485, 77.0560], [30.2520, 77.0470]
+    ];
+
+    function startEvalSimulation() {
+        if (isEvalSimActive) return;
+        isEvalSimActive = true;
+        const evalText = document.getElementById('eval-sim-text');
+        const evalBtn = document.getElementById('btn-eval-sim');
+        if (evalText) evalText.textContent = 'Demo Simulation: ON (Broadcasting)';
+        if (evalBtn) {
+            evalBtn.className = 'w-full h-11 bg-purple-700 text-white border border-purple-500 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer animate-pulse';
+        }
+        streamCard.classList.remove('hidden');
+        const streamLabel = document.getElementById('stream-status-label');
+        if (streamLabel) {
+            streamLabel.textContent = '⚠️ SIMULATION BROADCASTING';
+            streamLabel.className = 'text-xs font-extrabold text-purple-400 font-mono uppercase tracking-wider';
+        }
+
+        evalStepIndex = 0;
+        if (evalSimInterval) clearInterval(evalSimInterval);
+
+        evalSimInterval = setInterval(() => {
+            if (!isEvalSimActive) return;
+            evalStepIndex = (evalStepIndex + 1) % evalCoordinates.length;
+            const pt = evalCoordinates[evalStepIndex];
+            packetCount++;
+            sequenceNumber++;
+            packetsEl.textContent = packetCount;
+            latEl.textContent = `${pt[0].toFixed(5)}° N`;
+            lngEl.textContent = `${pt[1].toFixed(5)}° E`;
+            speedMeter.textContent = '40 km/h';
+
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    event_type: "DRIVER_TELEMETRY",
+                    bus_id: busId,
+                    lat: pt[0],
+                    lng: pt[1],
+                    accuracy: 8.0,
+                    speed_kmh: 40.0,
+                    heading: 85.0,
+                    sequence_number: sequenceNumber,
+                    client_timestamp: Date.now(),
+                    is_simulation: true
+                }));
+            }
+        }, 1500);
+    }
+
+    function stopEvalSimulation() {
+        if (!isEvalSimActive) return;
+        isEvalSimActive = false;
+        if (evalSimInterval) {
+            clearInterval(evalSimInterval);
+            evalSimInterval = null;
+        }
+        const evalText = document.getElementById('eval-sim-text');
+        const evalBtn = document.getElementById('btn-eval-sim');
+        if (evalText) evalText.textContent = 'Indoor Demo Simulation: OFF';
+        if (evalBtn) {
+            evalBtn.className = 'w-full h-11 bg-zinc-900 hover:bg-purple-950/40 text-zinc-400 hover:text-purple-300 border border-zinc-800 hover:border-purple-800 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer';
+        }
+        const streamLabel = document.getElementById('stream-status-label');
+        if (streamLabel) {
+            streamLabel.textContent = 'Broadcasting live GPS';
+            streamLabel.className = 'text-xs font-extrabold text-green-400 font-mono uppercase tracking-wider';
+        }
+        if (!isBroadcasting) streamCard.classList.add('hidden');
+    }
+
+    const evalSimBtn = document.getElementById('btn-eval-sim');
+    if (evalSimBtn) {
+        evalSimBtn.addEventListener('click', () => {
+            if (!isEvalSimActive) {
+                if (confirm('Enable Indoor Demo Simulation?\n\nThis broadcasts simulated coordinates along the highway route for testing without walking outside.\n\nIt is visibly marked as [SIMULATION] on both driver and passenger screens.')) {
+                    startEvalSimulation();
+                }
+            } else {
+                stopEvalSimulation();
+            }
+        });
+    }
 });
 </script>
 <script src="../i18n.js"></script>

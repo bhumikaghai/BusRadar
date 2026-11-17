@@ -152,10 +152,10 @@
             <div class="space-y-1.5 pt-1">
                 <div class="flex justify-between items-center text-xs font-bold text-slate-600">
                     <span data-i18n="journey_progress_label">Corridor Progress</span>
-                    <span id="progress-percentage-text" class="font-mono text-primary font-black">Tracking...</span>
+                    <span id="progress-percentage-text" class="font-mono text-primary font-black">Waiting for live GPS...</span>
                 </div>
                 <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5">
-                    <div id="progress-bar-fill" class="h-full bg-primary rounded-full transition-all duration-700 ease-out" style="width: 50%;"></div>
+                    <div id="progress-bar-fill" class="h-full bg-primary rounded-full transition-all duration-700 ease-out" style="width: 0%;"></div>
                 </div>
             </div>
         </div>
@@ -298,9 +298,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         </div>
     `;
-    const busMarker = L.marker(highwayRoute[0], {
-        icon: L.divIcon({ className: 'active-bus-icon', html: activeBusIconHtml, iconSize: [44, 44], iconAnchor: [22, 22] })
-    }).addTo(map);
+    let busMarker = null;
 
     const countdownEl = document.getElementById('active-eta-countdown');
     const speedEl = document.getElementById('highway-speed');
@@ -329,15 +327,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const socket = new WebSocket(WS_URL);
 
             socket.onopen = () => {
-                activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
-                activeGpsStatusLabel.textContent = 'ON-BOARD GPS ACTIVE';
+                activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+                activeGpsStatusLabel.textContent = 'WAITING FOR DRIVER GPS';
             };
 
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.event_type === 'DRIVER_TELEMETRY' && data.lat && data.lng) {
-                        busMarker.setLatLng([data.lat, data.lng]);
+                        if (!busMarker) {
+                            busMarker = L.marker([data.lat, data.lng], {
+                                icon: L.divIcon({ className: 'active-bus-icon', html: activeBusIconHtml, iconSize: [44, 44], iconAnchor: [22, 22] })
+                            }).addTo(map);
+                        } else {
+                            busMarker.setLatLng([data.lat, data.lng]);
+                        }
+
+                        activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
+                        activeGpsStatusLabel.textContent = data.is_simulation ? 'SIMULATION' : 'LIVE GPS ACTIVE';
+
                         speedEl.textContent = `${data.speed_kmh || 0} km/h`;
                         if (data.bus_id) busPlateEl.textContent = data.bus_id;
 
@@ -363,13 +371,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         } else {
                             incidentBanner.classList.add('hidden');
                         }
+                    } else if (data.event_type === 'TRIP_ENDED') {
+                        if (busMarker) {
+                            map.removeLayer(busMarker);
+                            busMarker = null;
+                        }
+                        activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+                        activeGpsStatusLabel.textContent = 'TRIP COMPLETED';
+                        speedEl.textContent = '0 km/h';
+                        progressBarFill.style.width = '100%';
+                        progressText.textContent = 'Trip Ended';
                     }
                 } catch (e) {}
             };
 
             socket.onclose = () => {
                 activeGpsDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
-                activeGpsStatusLabel.textContent = 'CONNECTING...';
+                activeGpsStatusLabel.textContent = 'DISCONNECTED';
                 setTimeout(connectJourneyWebSocket, 3000);
             };
         } catch (e) {

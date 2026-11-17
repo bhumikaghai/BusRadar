@@ -38,6 +38,7 @@ logger = logging.getLogger("BusRadar")
 DRIVER_SIGNING_SECRET = os.getenv("DRIVER_SIGNING_SECRET", "busradar_field_secret_key_change_me_in_render")
 ADMIN_PASSCODE = os.getenv("ADMIN_PASSCODE", "BusRadarAdmin2024!")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
+SIMULATION_ENABLED = os.getenv("SIMULATION_ENABLED", "false").lower() in ("true", "1", "yes")
 SERVER_START_TIME = time.time()
 
 # Background task: Clean up inactive trips (>10 minutes silence) for privacy & memory safety
@@ -273,6 +274,7 @@ class DriverTelemetrySchema(BaseModel):
     heading: Optional[float] = Field(default=0.0, ge=0.0, le=360.0)
     client_timestamp: float = Field(...)
     sequence_number: Optional[int] = Field(default=0)
+    is_simulation: Optional[bool] = Field(default=False)
     route_from: Optional[str] = Field(default="Yamuna Nagar Bus Stand", max_length=100)
     route_to: Optional[str] = Field(default="MMDU Campus Gate", max_length=100)
 
@@ -576,6 +578,13 @@ async def get_urban_analytics(request: Request):
         "congestion_status": "Free Flow" if total_delay == 0 else ("Moderate" if total_delay <= 10 else "Heavy Delay")
     }
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    icon_path = os.path.join("static", "icons", "icon-192.svg")
+    if os.path.exists(icon_path):
+        return FileResponse(icon_path, media_type="image/svg+xml")
+    return Response(status_code=204)
+
 # ==============================================================================
 # WEBSOCKET TELEMETRY & INCIDENT GATEWAY
 # ==============================================================================
@@ -713,6 +722,7 @@ async def telemetry_websocket(websocket: WebSocket, token: Optional[str] = Query
                     "speed_kmh": payload.speed_kmh,
                     "heading": payload.heading,
                     "sequence_number": payload.sequence_number,
+                    "is_simulation": bool(payload.is_simulation),
                     "last_updated_timestamp": now_ts,
                     "status": "LIVE"
                 })
@@ -732,6 +742,7 @@ async def telemetry_websocket(websocket: WebSocket, token: Optional[str] = Query
                     "accuracy": payload.accuracy,
                     "speed_kmh": payload.speed_kmh,
                     "heading": payload.heading,
+                    "is_simulation": bool(payload.is_simulation),
                     "delay_minutes": trip_record.get("delay_minutes", 0),
                     "delay_reason": trip_record.get("delay_reason", "ON_TIME"),
                     "sequence_number": payload.sequence_number,

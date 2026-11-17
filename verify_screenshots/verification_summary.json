@@ -1,0 +1,74 @@
+{
+  "brave_version": "157.0.8103.79",
+  "brave_path_exists": true,
+  "edge_path_exists": true,
+  "scenarios": {
+    "Scenario_A": {
+      "status_text": "WAITING FOR DRIVER",
+      "marker_count": 0,
+      "marker_stationary": true,
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\A_passenger_no_driver.png"
+    },
+    "Scenario_B1": {
+      "status_text": "Location permission required",
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_denied.png"
+    },
+    "Scenario_B2": {
+      "stream_status": "REAL GPS: BROADCASTING",
+      "accuracy_status": "Good (\u00b18m)",
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\B_driver_broadcasting.png"
+    },
+    "Scenario_C": {
+      "status_text": "LIVE GPS (<10S)",
+      "marker_present": true,
+      "screenshot_before": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\C_passenger_before_move.png",
+      "screenshot_after": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\C_passenger_after_move.png"
+    },
+    "Scenario_D": {
+      "status_observed": "WAITING FOR DRIVER",
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\D_passenger_stale.png"
+    },
+    "Scenario_E": {
+      "root_screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\E_root.png",
+      "docs_screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\E_docs.png"
+    },
+    "Scenario_F": {
+      "edge_status": "WAITING FOR DRIVER",
+      "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\verify_screenshots\\F_edge_passenger.png"
+    }
+  },
+  "console_errors": {
+    "Scenario_A_Passenger": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "Scenario_B1_Driver_Denied": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] Wake Lock request error: NotAllowedError: Wake Lock permission request denied"
+    ],
+    "Scenario_B2_Driver_Broadcast": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] Wake Lock request error: NotAllowedError: Wake Lock permission request denied"
+    ],
+    "Scenario_C_Passenger_Live": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "Scenario_E_Root": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ]
+  },
+  "statements": {
+    "passenger_no_driver": {
+      "marker_stationary": "YES",
+      "status_text_observed": "WAITING FOR DRIVER"
+    },
+    "driver_permission_denied": "Location permission required",
+    "driver_broadcasting": "REAL GPS: BROADCASTING",
+    "passenger_live": {
+      "status_observed": "LIVE GPS (<10S)",
+      "marker_moved": "YES"
+    },
+    "passenger_stale": "WAITING FOR DRIVER"
+  }
+}

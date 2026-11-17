@@ -96,8 +96,8 @@
                 <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             </button>
             <div class="flex items-center gap-1.5">
-                <div id="telemetry-ws-dot" class="w-2.5 h-2.5 rounded-full bg-zinc-400"></div>
-                <span id="telemetry-mode-label" class="text-xs font-black text-slate-500 tracking-wide uppercase">CONNECTING...</span>
+                <div id="telemetry-ws-dot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+                <span id="telemetry-mode-label" class="text-xs font-black text-slate-500 tracking-wide uppercase">WAITING FOR DRIVER</span>
             </div>
         </div>
         <div class="flex items-center gap-2">
@@ -128,6 +128,16 @@
 
 <!-- Map Viewport -->
 <div class="relative flex-1 w-full z-10" id="map-viewport">
+    <!-- High-Visibility Simulation Mode Banner (Hidden by default, shown ONLY when simulation is explicitly enabled) -->
+    <div id="sim-warning-banner" class="hidden absolute top-0 left-0 w-full bg-purple-700 text-white px-3.5 py-2 flex items-center justify-between shadow-lg z-30 border-b border-purple-500">
+        <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-yellow-300 animate-pulse">warning</span>
+            <span class="text-xs font-black tracking-wide uppercase">⚠️ SIMULATION MODE ACTIVE (NOT REAL GPS)</span>
+        </div>
+        <button id="btn-stop-sim" type="button" class="bg-white text-purple-900 font-extrabold text-[10px] px-2.5 py-1 rounded-md hover:bg-purple-50 transition-all cursor-pointer shadow-xs">
+            STOP SIM
+        </button>
+    </div>
     <div class="w-full h-full" id="passenger-live-map"></div>
 </div>
 
@@ -165,8 +175,17 @@
         <div class="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 mb-1.5">
             <span class="material-symbols-outlined text-[22px]">directions_bus</span>
         </div>
-        <div data-i18n="pass_no_buses" class="text-xs font-extrabold text-slate-800">No buses currently broadcasting on this corridor</div>
-        <p data-i18n="pass_waiting_driver" class="text-[11px] text-slate-500 mt-0.5 max-w-xs">Live tracking and ETA will appear as soon as a driver starts their trip.</p>
+        <div data-i18n="pass_no_buses" class="text-xs font-extrabold text-slate-800">Waiting for live GPS (No driver broadcasting)</div>
+        <p data-i18n="pass_waiting_driver" class="text-[11px] text-slate-500 mt-0.5 max-w-xs">Live tracking and road ETA will activate as soon as an authorized driver starts their trip on driver.html.</p>
+    </div>
+
+    <!-- Explicit Simulation Mode Section (OFF by default) -->
+    <div class="flex items-center justify-between px-1 text-xs">
+        <span class="text-[11px] font-bold text-slate-400">Indoor Demo:</span>
+        <button id="btn-toggle-sim" type="button" class="text-[11px] font-extrabold px-3 py-1 rounded-xl bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 border border-slate-200 flex items-center gap-1 cursor-pointer transition-all">
+            <span class="material-symbols-outlined text-[15px]">smart_toy</span>
+            <span id="btn-sim-text">Demo Simulation: OFF</span>
+        </button>
     </div>
 
     <!-- Booking Pass / Coming Soon CTA Button (h-14) -->
@@ -407,18 +426,22 @@ document.addEventListener('DOMContentLoaded', function () {
             anyActive = true;
 
             // Honest status indicators:
-            // Live (<10s), Weak signal (10-30s), Last seen (>30s)
-            if (ageMs < 10000) {
-                telemetryModeLabel.textContent = 'LIVE (<10s ago)';
+            // Simulation, Live (<10s), Stale (10-30s), Stale (>30s)
+            if (bus.isSimulation || isSimulationMode) {
+                telemetryModeLabel.textContent = 'SIMULATION';
+                telemetryModeLabel.className = 'text-xs font-black text-purple-700 tracking-wide uppercase';
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse';
+            } else if (ageMs < 10000) {
+                telemetryModeLabel.textContent = 'LIVE GPS (<10s)';
                 telemetryModeLabel.className = 'text-xs font-black text-status-success tracking-wide uppercase';
                 telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-status-success animate-ping';
             } else if (ageMs < 30000) {
-                telemetryModeLabel.textContent = `WEAK SIGNAL (${Math.round(ageMs/1000)}s)`;
+                telemetryModeLabel.textContent = `STALE (${Math.round(ageMs/1000)}s)`;
                 telemetryModeLabel.className = 'text-xs font-black text-amber-600 tracking-wide uppercase animate-pulse';
                 telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse';
             } else {
-                const minsAgo = Math.round(ageMs / 60000);
-                telemetryModeLabel.textContent = `LAST SEEN ${minsAgo}M AGO`;
+                const secsAgo = Math.round(ageMs / 1000);
+                telemetryModeLabel.textContent = `STALE (>${secsAgo}s)`;
                 telemetryModeLabel.className = 'text-xs font-bold text-slate-500 tracking-wide uppercase';
                 telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
             }
@@ -437,10 +460,16 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             activeBusCard.classList.add('hidden');
             emptyBusCard.classList.remove('hidden');
-            telemetryModeLabel.textContent = 'WAITING FOR TRIP';
-            telemetryModeLabel.className = 'text-xs font-bold text-slate-500 uppercase';
-            telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
-            liveSpeedEl.textContent = '0 km/h';
+            if (isSimulationMode) {
+                telemetryModeLabel.textContent = 'SIMULATION';
+                telemetryModeLabel.className = 'text-xs font-black text-purple-700 uppercase';
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-purple-600';
+            } else {
+                telemetryModeLabel.textContent = 'WAITING FOR DRIVER';
+                telemetryModeLabel.className = 'text-xs font-bold text-slate-500 uppercase';
+                telemetryDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+                liveSpeedEl.textContent = '0 km/h';
+            }
         }
 
         requestAnimationFrame(renderLoop);
@@ -504,8 +533,27 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!busId || !data.lat || !data.lng) return;
 
         const now = Date.now();
+        const isSim = Boolean(data.is_simulation);
+
         if (!activeBuses.has(busId)) {
-            const marker = L.marker([data.lat, data.lng], { icon: busMarkerIcon }).addTo(map);
+            const iconHtml = isSim ? `
+                <div style="width: 40px; height: 40px; background: #7e22ce; border: 3px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 14px rgba(126,34,206,0.6);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+                    </svg>
+                </div>
+            ` : busMarkerHtml;
+
+            const icon = L.divIcon({
+                className: 'bus-custom-marker',
+                html: iconHtml,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            const marker = L.marker([data.lat, data.lng], { icon: icon }).addTo(map);
+            marker.bindPopup(`<b>${busId}</b> ${isSim ? '<span style="color:#7e22ce; font-weight:bold;">[SIMULATION]</span>' : '<span style="color:#059669; font-weight:bold;">[LIVE GPS]</span>'}`);
+
             activeBuses.set(busId, {
                 marker: marker,
                 currentLat: data.lat,
@@ -515,6 +563,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 speed_kmh: data.speed_kmh || 0,
                 delay_minutes: data.delay_minutes || 0,
                 lastPacketTime: now,
+                isSimulation: isSim,
                 isEnded: false
             });
         } else {
@@ -524,11 +573,103 @@ document.addEventListener('DOMContentLoaded', function () {
             bus.speed_kmh = data.speed_kmh || 0;
             bus.delay_minutes = data.delay_minutes || 0;
             bus.lastPacketTime = now;
+            bus.isSimulation = isSim;
             bus.isEnded = false;
         }
 
-        livePlateEl.textContent = busId;
+        livePlateEl.textContent = busId + (isSim ? " [SIM]" : "");
         liveSpeedEl.textContent = `${data.speed_kmh || 0} km/h`;
+    }
+
+    // 8. Explicit Simulation Controls (OFF BY DEFAULT - ONLY USER TRIGGERED)
+    let isSimulationMode = false;
+    let simInterval = null;
+    let simWaypointIdx = 0;
+
+    function startSimulationMode() {
+        if (isSimulationMode) return;
+        isSimulationMode = true;
+        const banner = document.getElementById('sim-warning-banner');
+        if (banner) banner.classList.remove('hidden');
+        const btnText = document.getElementById('btn-sim-text');
+        if (btnText) btnText.textContent = 'Demo Simulation: ON';
+        const toggleBtn = document.getElementById('btn-toggle-sim');
+        if (toggleBtn) {
+            toggleBtn.className = 'text-[11px] font-extrabold px-3 py-1 rounded-xl bg-purple-600 text-white border border-purple-500 flex items-center gap-1 cursor-pointer transition-all animate-pulse';
+        }
+
+        simWaypointIdx = 0;
+        const simBusId = "SIM-BUS-01";
+
+        // Initial simulated fix at first stop
+        ingestBusPacket({
+            event_type: "DRIVER_TELEMETRY",
+            bus_id: simBusId,
+            lat: routeWaypoints[0][0],
+            lng: routeWaypoints[0][1],
+            speed_kmh: 40.0,
+            delay_minutes: 0,
+            is_simulation: true
+        });
+
+        if (simInterval) clearInterval(simInterval);
+        simInterval = setInterval(() => {
+            if (!isSimulationMode) return;
+            simWaypointIdx = (simWaypointIdx + 1) % routeWaypoints.length;
+            const pt = routeWaypoints[simWaypointIdx];
+            const simSpeed = Math.round(35 + Math.sin(simWaypointIdx * 0.5) * 10);
+            ingestBusPacket({
+                event_type: "DRIVER_TELEMETRY",
+                bus_id: simBusId,
+                lat: pt[0],
+                lng: pt[1],
+                speed_kmh: simSpeed,
+                delay_minutes: 0,
+                is_simulation: true
+            });
+        }, 1800);
+    }
+
+    function stopSimulationMode() {
+        if (!isSimulationMode) return;
+        isSimulationMode = false;
+        if (simInterval) {
+            clearInterval(simInterval);
+            simInterval = null;
+        }
+        const banner = document.getElementById('sim-warning-banner');
+        if (banner) banner.classList.add('hidden');
+        const btnText = document.getElementById('btn-sim-text');
+        if (btnText) btnText.textContent = 'Demo Simulation: OFF';
+        const toggleBtn = document.getElementById('btn-toggle-sim');
+        if (toggleBtn) {
+            toggleBtn.className = 'text-[11px] font-extrabold px-3 py-1 rounded-xl bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 border border-slate-200 flex items-center gap-1 cursor-pointer transition-all';
+        }
+
+        const simBusId = "SIM-BUS-01";
+        if (activeBuses.has(simBusId)) {
+            const b = activeBuses.get(simBusId);
+            if (b.marker) map.removeLayer(b.marker);
+            activeBuses.delete(simBusId);
+        }
+    }
+
+    const simToggleBtn = document.getElementById('btn-toggle-sim');
+    if (simToggleBtn) {
+        simToggleBtn.addEventListener('click', () => {
+            if (!isSimulationMode) {
+                if (confirm('Enable Demo Simulation Mode?\n\nThis generates simulated movement along the corridor for indoor demonstration without a real driver phone.\n\nIt is visibly marked as [SIMULATION] and is NOT real GPS.')) {
+                    startSimulationMode();
+                }
+            } else {
+                stopSimulationMode();
+            }
+        });
+    }
+
+    const stopSimBtn = document.getElementById('btn-stop-sim');
+    if (stopSimBtn) {
+        stopSimBtn.addEventListener('click', stopSimulationMode);
     }
 
     function handleDelayAlert(data) {
