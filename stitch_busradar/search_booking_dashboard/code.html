@@ -112,11 +112,23 @@
         </div>
     </div>
 
-    <!-- Stop Search Combobox (Typo-Tolerant with Fuse.js) -->
-    <div class="relative">
+    <!-- Origin Stop Search Combobox (From) -->
+    <div class="relative z-30">
+        <div class="flex items-center bg-white border border-slate-300 rounded-2xl px-3 py-1.5 shadow-xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all h-12">
+            <span class="material-symbols-outlined text-green-600 mr-2 text-[20px]">trip_origin</span>
+            <input id="passenger-origin-search" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-0 focus:outline-none" placeholder="From: Origin Stop (e.g. Yamuna Nagar, Ambala)..." type="text" value="Yamuna Nagar Bus Stand" autocomplete="off"/>
+            <button id="btn-clear-origin-search" class="text-slate-400 hover:text-slate-700 cursor-pointer flex items-center">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+        <ul id="origin-autocomplete-dropdown" class="hidden absolute z-50 w-full bg-white max-h-48 overflow-y-auto rounded-2xl border border-slate-200 shadow-xl mt-1 divide-y divide-slate-100"></ul>
+    </div>
+
+    <!-- Stop Search Combobox (To) -->
+    <div class="relative z-20">
         <div class="flex items-center bg-white border border-slate-300 rounded-2xl px-3 py-1.5 shadow-xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all h-12">
             <span class="material-symbols-outlined text-red-600 mr-2 text-[20px]">location_on</span>
-            <input id="passenger-stop-search" data-i18n-ph="pass_to_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-0 focus:outline-none" placeholder="Destination Stop: MMDU Campus Gate..." type="text" value="MMDU Campus Gate"/>
+            <input id="passenger-stop-search" data-i18n-ph="pass_to_ph" class="w-full bg-transparent border-none p-0 text-xs sm:text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-0 focus:outline-none" placeholder="To: Destination Stop (e.g. MMDU, Chandigarh)..." type="text" value="MMDU Campus Gate" autocomplete="off"/>
             <button id="btn-clear-search" class="text-slate-400 hover:text-slate-700 cursor-pointer flex items-center">
                 <span class="material-symbols-outlined text-[18px]">close</span>
             </button>
@@ -188,6 +200,18 @@
         </button>
     </div>
 
+    <!-- Active & Registered Fleet Ribbon -->
+    <div id="passenger-fleet-container" class="space-y-1.5 pt-1 border-t border-slate-100">
+        <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <span class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-[15px] text-primary">directions_bus</span>
+                Active &amp; Registered Fleet:
+            </span>
+            <span id="fleet-count-badge" class="font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-700 font-black">-- Buses</span>
+        </div>
+        <div id="passenger-fleet-list" class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none"></div>
+    </div>
+
     <!-- Booking Pass / Coming Soon CTA Button (h-14) -->
     <button id="btn-open-ticket-modal" class="w-full bg-primary hover:bg-[#002561] text-white font-extrabold text-sm rounded-2xl h-14 flex items-center justify-center gap-2 hover:shadow-lg active:scale-95 transition-all shadow-md cursor-pointer">
         <span class="material-symbols-outlined text-[20px]">confirmation_number</span>
@@ -195,21 +219,26 @@
     </button>
 </div>
 
-<!-- Modal: Digital Ticketing Coming Soon Placeholder -->
+<!-- Modal: Digital Transit Pass -->
 <div id="modal-ticket-soon" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center gap-3.5 border border-slate-200">
         <div class="w-14 h-14 rounded-2xl bg-blue-50 text-primary border border-blue-200 flex items-center justify-center shadow-inner">
-            <span class="material-symbols-outlined text-[32px]">smartphone</span>
+            <span class="material-symbols-outlined text-[32px]">confirmation_number</span>
         </div>
         <div>
-            <h3 data-i18n="pass_ticket_soon_title" class="font-black text-lg text-slate-900">Digital Ticketing Coming Soon</h3>
-            <p data-i18n="pass_ticket_soon_desc" class="text-xs text-slate-500 mt-1 max-w-xs">Unified cashless ticketing and automated digital pass issuance will launch in the next release.</p>
+            <h3 data-i18n="pass_ticket_soon_title" class="font-black text-lg text-slate-900">Digital Transit Pass</h3>
+            <p data-i18n="pass_ticket_soon_desc" class="text-xs text-slate-500 mt-1 max-w-xs">Unified cashless corridor transit ticketing and automated pass issuance.</p>
         </div>
-        <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-600 font-mono text-left space-y-1">
-            <div class="flex justify-between"><span>Selected Route:</span><b class="text-slate-800">Yamuna Nagar ⇄ MMDU</b></div>
-            <div class="flex justify-between"><span>Standard Transit Fare:</span><b class="text-green-700">₹25.00</b></div>
+        <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-600 font-mono text-left space-y-1.5">
+            <div class="flex justify-between items-center"><span class="text-slate-500 font-sans">Route:</span><b id="ticket-route-display" class="text-slate-900 font-extrabold text-right truncate max-w-[200px]">Yamuna Nagar Bus Stand → MMDU Campus Gate</b></div>
+            <div class="flex justify-between items-center"><span class="text-slate-500 font-sans">Estimated Transit Fare:</span><b id="ticket-fare-display" class="text-green-700 font-extrabold">₹25.00</b></div>
+            <div id="ticket-warning-note" class="hidden text-[10px] text-amber-600 font-sans font-semibold pt-1 border-t border-slate-200">Select origin and destination for accurate fare</div>
         </div>
-        <button id="btn-close-ticket-modal" class="w-full h-12 bg-slate-900 text-white font-bold rounded-2xl text-xs cursor-pointer hover:bg-black transition-colors">
+        <button id="btn-generate-pass" class="w-full h-12 bg-primary hover:bg-[#002561] text-white font-bold rounded-2xl text-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow-md">
+            <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
+            <span id="btn-generate-pass-text">Generate Digital Pass</span>
+        </button>
+        <button id="btn-close-ticket-modal" class="w-full h-10 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-2xl text-xs cursor-pointer transition-colors">
             Got it
         </button>
     </div>
@@ -314,7 +343,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const ticketModal = document.getElementById('modal-ticket-soon');
     const openTicketBtn = document.getElementById('btn-open-ticket-modal');
     const closeTicketBtn = document.getElementById('btn-close-ticket-modal');
-    openTicketBtn.addEventListener('click', () => ticketModal.classList.remove('hidden'));
+    openTicketBtn.addEventListener('click', () => {
+        if (typeof updateTicketPassInfo === 'function') updateTicketPassInfo();
+        ticketModal.classList.remove('hidden');
+    });
     closeTicketBtn.addEventListener('click', () => ticketModal.classList.add('hidden'));
 
     // 4. Multi-Bus Active Map Registry
@@ -514,6 +546,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             const b = activeBuses.get(data.bus_id);
                             b.isEnded = true;
                         }
+                    } else if (data.event_type === 'FLEET_UPDATED') {
+                        fetchFleetAndUpdateUI();
                     }
                 } catch (e) {
                     console.warn('Packet parse error:', e);
@@ -727,148 +761,291 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .catch(err => console.warn('Could not load Haryana bus stands dataset:', err));
 
-    const searchInput = document.getElementById('passenger-stop-search');
-    const dropdown = document.getElementById('stop-autocomplete-dropdown');
-    const clearBtn = document.getElementById('btn-clear-search');
-    let activeHighlightIndex = -1;
-    let currentRenderedItems = [];
+    // Dynamic Ticket & Pass Calculation
+    function updateTicketPassInfo() {
+        const originInput = document.getElementById('passenger-origin-search');
+        const searchInput = document.getElementById('passenger-stop-search');
+        const fromVal = originInput ? originInput.value.trim() : '';
+        const toVal = searchInput ? searchInput.value.trim() : '';
+        const ticketRouteEl = document.getElementById('ticket-route-display');
+        const ticketFareEl = document.getElementById('ticket-fare-display');
+        const warningNote = document.getElementById('ticket-warning-note');
+        const generateBtn = document.getElementById('btn-generate-pass');
 
-    function selectStand(item) {
-        searchInput.value = item.name;
-        dropdown.classList.add('hidden');
-        activeHighlightIndex = -1;
-        clearBtn.classList.remove('hidden');
-
-        // Check if stand matches local corridor route for map centering
-        const corridorMatch = stopsList.find(s => s.name.toLowerCase() === item.name.toLowerCase() || (s.name.includes(item.name) || item.name.includes(s.name)));
-        if (corridorMatch) {
-            selectedDestinationStop = corridorMatch;
-            map.panTo(corridorMatch.coords);
-        }
-
-        const liveDestEl = document.getElementById('live-route-dest');
-        if (liveDestEl) liveDestEl.textContent = item.name;
-    }
-
-    function renderSearchResults(results) {
-        activeHighlightIndex = -1;
-        currentRenderedItems = [];
-
-        if (!results.length) {
-            dropdown.innerHTML = `
-                <li class="px-4 py-2.5 text-xs text-slate-400 text-center">No bus stand found</li>
-            `;
-            dropdown.classList.remove('hidden');
+        if (!fromVal || !toVal) {
+            if (ticketRouteEl) ticketRouteEl.textContent = fromVal ? `${fromVal} → (Select Destination)` : (toVal ? `(Select Origin) → ${toVal}` : 'Select Origin & Destination');
+            if (ticketFareEl) ticketFareEl.textContent = '--';
+            if (warningNote) warningNote.classList.remove('hidden');
+            if (generateBtn) {
+                generateBtn.disabled = true;
+                generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                generateBtn.classList.remove('hover:bg-[#002561]', 'cursor-pointer');
+            }
             return;
         }
 
-        // Render up to 8 suggestions
-        const topResults = results.slice(0, 8);
-        currentRenderedItems = topResults.map(r => r.item || r);
+        if (warningNote) warningNote.classList.add('hidden');
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            generateBtn.classList.add('hover:bg-[#002561]', 'cursor-pointer');
+        }
 
-        dropdown.innerHTML = topResults.map(({ item }, idx) => `
-            <li class="passenger-suggest-item px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between group transition-colors" data-idx="${idx}">
-                <div class="truncate mr-2">
-                    <div class="text-xs font-bold text-slate-800 group-hover:text-primary truncate">${item.name}</div>
-                    <div class="text-[10px] text-slate-500 truncate">${item.district ? item.district + ' District' : ''}${item.aliases && item.aliases.length ? ' • ' + item.aliases[0] : ''}</div>
-                </div>
-                <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-primary">check_circle</span>
-            </li>
-        `).join('');
-        dropdown.classList.remove('hidden');
+        if (ticketRouteEl) ticketRouteEl.textContent = `${fromVal} → ${toVal}`;
 
-        dropdown.querySelectorAll('.passenger-suggest-item').forEach(el => {
-            const idx = parseInt(el.getAttribute('data-idx'), 10);
-            const item = currentRenderedItems[idx];
-            const onSelect = function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                selectStand(item);
-            };
-            el.addEventListener('click', onSelect);
-            el.addEventListener('touchend', onSelect);
-        });
-    }
+        // Calculate dynamic distance-based or flat fare
+        let fare = 25.0;
+        const fromStand = (haryanaBusStands || []).find(s => s.name.toLowerCase() === fromVal.toLowerCase());
+        const toStand = (haryanaBusStands || []).find(s => s.name.toLowerCase() === toVal.toLowerCase());
 
-    function updateHighlight() {
-        const items = dropdown.querySelectorAll('.passenger-suggest-item');
-        items.forEach((el, idx) => {
-            if (idx === activeHighlightIndex) {
-                el.classList.add('bg-blue-50', 'text-primary');
-                el.scrollIntoView({ block: 'nearest' });
-            } else {
-                el.classList.remove('bg-blue-50', 'text-primary');
-            }
-        });
-    }
-
-    const triggerSearch = () => {
-        const query = searchInput.value.trim();
-        if (query.length > 0) {
-            clearBtn.classList.remove('hidden');
-            if (passengerFuse) {
-                renderSearchResults(passengerFuse.search(query));
-            }
+        if (fromStand && toStand && fromStand.coords && toStand.coords) {
+            const dLat = (toStand.coords[0] - fromStand.coords[0]) * Math.PI / 180;
+            const dLng = (toStand.coords[1] - fromStand.coords[1]) * Math.PI / 180;
+            const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(fromStand.coords[0]*Math.PI/180)*Math.cos(toStand.coords[0]*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+            const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            fare = Math.max(15.0, Math.round(distKm * 1.2));
         } else {
+            fare = 35.0;
+        }
+
+        if (ticketFareEl) ticketFareEl.textContent = `₹${fare.toFixed(2)}`;
+    }
+
+    const btnGenPass = document.getElementById('btn-generate-pass');
+    if (btnGenPass) {
+        btnGenPass.addEventListener('click', () => {
+            const originInput = document.getElementById('passenger-origin-search');
+            const searchInput = document.getElementById('passenger-stop-search');
+            const fromVal = originInput ? originInput.value.trim() : '';
+            const toVal = searchInput ? searchInput.value.trim() : '';
+            if (!fromVal || !toVal) return;
+            const passText = document.getElementById('btn-generate-pass-text');
+            if (passText) passText.textContent = 'Pass Issued! (Valid Today)';
+            btnGenPass.classList.remove('bg-primary');
+            btnGenPass.classList.add('bg-green-700');
+            setTimeout(() => {
+                if (passText) passText.textContent = 'Generate Digital Pass';
+                btnGenPass.classList.add('bg-primary');
+                btnGenPass.classList.remove('bg-green-700');
+            }, 3000);
+        });
+    }
+
+    // Dynamic Fleet Ribbon Synchronization
+    function fetchFleetAndUpdateUI() {
+        fetch('/api/fleet')
+            .then(res => res.json())
+            .then(data => {
+                const listEl = document.getElementById('passenger-fleet-list');
+                const countBadge = document.getElementById('fleet-count-badge');
+                if (!listEl) return;
+                const fleet = data.fleet || [];
+                if (countBadge) {
+                    countBadge.textContent = `${data.total_active || 0} Live / ${data.total_registered || fleet.length} Buses`;
+                }
+                if (fleet.length === 0) {
+                    listEl.innerHTML = '<span class="text-xs text-slate-400 italic py-1">No buses registered</span>';
+                    return;
+                }
+                listEl.innerHTML = fleet.map(b => {
+                    const isActive = b.status === 'ACTIVE' || activeBuses.has(b.bus_id);
+                    return `
+                        <div class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all ${isActive ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-600'}">
+                            <span class="w-2 h-2 rounded-full ${isActive ? 'bg-green-500 animate-ping' : 'bg-slate-400'}"></span>
+                            <span class="font-extrabold">${b.bus_id}</span>
+                            <span class="text-[10px] text-slate-400 truncate max-w-[90px] font-sans">(${b.driver_name || 'Driver'})</span>
+                        </div>
+                    `;
+                }).join('');
+            })
+            .catch(err => console.warn('Could not fetch fleet:', err));
+    }
+
+    // Generic Autocomplete Combobox Controller
+    function setupCombobox({ inputId, dropdownId, clearBtnId, storageKey, defaultVal, onSelect }) {
+        const inputEl = document.getElementById(inputId);
+        const dropdownEl = document.getElementById(dropdownId);
+        const clearBtnEl = document.getElementById(clearBtnId);
+        if (!inputEl || !dropdownEl || !clearBtnEl) return;
+
+        // Restore persisted selection
+        const savedVal = localStorage.getItem(storageKey);
+        if (savedVal) {
+            inputEl.value = savedVal;
+            clearBtnEl.classList.remove('hidden');
+        } else if (defaultVal) {
+            inputEl.value = defaultVal;
+            clearBtnEl.classList.remove('hidden');
+            localStorage.setItem(storageKey, defaultVal);
+        }
+
+        let activeIdx = -1;
+        let renderedItems = [];
+
+        function renderResults(results) {
+            activeIdx = -1;
+            renderedItems = [];
+
+            if (!results.length) {
+                dropdownEl.innerHTML = '<li class="px-4 py-2.5 text-xs text-slate-400 text-center">No bus stand found</li>';
+                dropdownEl.classList.remove('hidden');
+                return;
+            }
+
+            const topResults = results.slice(0, 8);
+            renderedItems = topResults.map(r => r.item || r);
+
+            dropdownEl.innerHTML = topResults.map(({ item }, idx) => `
+                <li class="suggest-item-${inputId} px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between group transition-colors" data-idx="${idx}">
+                    <div class="truncate mr-2">
+                        <div class="text-xs font-bold text-slate-800 group-hover:text-primary truncate">${item.name}</div>
+                        <div class="text-[10px] text-slate-500 truncate">${item.district ? item.district + ' District' : ''}${item.aliases && item.aliases.length ? ' • ' + item.aliases[0] : ''}</div>
+                    </div>
+                    <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-primary">check_circle</span>
+                </li>
+            `).join('');
+            dropdownEl.classList.remove('hidden');
+
+            dropdownEl.querySelectorAll(`.suggest-item-${inputId}`).forEach(el => {
+                const idx = parseInt(el.getAttribute('data-idx'), 10);
+                const item = renderedItems[idx];
+                const selectFn = function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    chooseItem(item);
+                };
+                el.addEventListener('click', selectFn);
+                el.addEventListener('touchend', selectFn);
+            });
+        }
+
+        function chooseItem(item) {
+            inputEl.value = item.name;
+            localStorage.setItem(storageKey, item.name);
+            dropdownEl.classList.add('hidden');
+            activeIdx = -1;
+            clearBtnEl.classList.remove('hidden');
+            if (onSelect) onSelect(item);
+            updateTicketPassInfo();
+        }
+
+        function updateItemHighlight() {
+            const items = dropdownEl.querySelectorAll(`.suggest-item-${inputId}`);
+            items.forEach((el, idx) => {
+                if (idx === activeIdx) {
+                    el.classList.add('bg-blue-50', 'text-primary');
+                    el.scrollIntoView({ block: 'nearest' });
+                } else {
+                    el.classList.remove('bg-blue-50', 'text-primary');
+                }
+            });
+        }
+
+        const triggerSearch = () => {
+            const q = inputEl.value.trim();
+            if (q.length > 0) {
+                clearBtnEl.classList.remove('hidden');
+                if (passengerFuse) {
+                    renderResults(passengerFuse.search(q));
+                }
+            } else {
+                const fallbackList = haryanaBusStands.length > 0 ? haryanaBusStands : stopsList;
+                renderResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
+            }
+        };
+
+        let debounce = null;
+        inputEl.addEventListener('input', () => {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => {
+                localStorage.setItem(storageKey, inputEl.value.trim());
+                updateTicketPassInfo();
+                triggerSearch();
+            }, 150);
+        });
+
+        inputEl.addEventListener('focus', triggerSearch);
+        inputEl.addEventListener('click', triggerSearch);
+        inputEl.addEventListener('touchstart', triggerSearch, { passive: true });
+
+        inputEl.addEventListener('keydown', (e) => {
+            if (dropdownEl.classList.contains('hidden')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (renderedItems.length > 0) {
+                    activeIdx = (activeIdx + 1) % renderedItems.length;
+                    updateItemHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (renderedItems.length > 0) {
+                    activeIdx = (activeIdx - 1 + renderedItems.length) % renderedItems.length;
+                    updateItemHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeIdx >= 0 && activeIdx < renderedItems.length) {
+                    chooseItem(renderedItems[activeIdx]);
+                }
+            } else if (e.key === 'Escape') {
+                dropdownEl.classList.add('hidden');
+                activeIdx = -1;
+            }
+        });
+
+        clearBtnEl.addEventListener('click', () => {
+            inputEl.value = '';
+            localStorage.removeItem(storageKey);
+            clearBtnEl.classList.add('hidden');
             const fallbackList = haryanaBusStands.length > 0 ? haryanaBusStands : stopsList;
-            renderSearchResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
-        }
-    };
+            renderResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
+            inputEl.focus();
+            updateTicketPassInfo();
+        });
 
-    let debounceTimer = null;
-    const onInputDebounced = () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            triggerSearch();
-        }, 150);
-    };
-
-    searchInput.addEventListener('input', onInputDebounced);
-    searchInput.addEventListener('focus', triggerSearch);
-    searchInput.addEventListener('click', triggerSearch);
-    searchInput.addEventListener('touchstart', triggerSearch, { passive: true });
-
-    // Keyboard navigation (ArrowUp, ArrowDown, Enter, Escape)
-    searchInput.addEventListener('keydown', (e) => {
-        if (dropdown.classList.contains('hidden')) return;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            if (currentRenderedItems.length > 0) {
-                activeHighlightIndex = (activeHighlightIndex + 1) % currentRenderedItems.length;
-                updateHighlight();
+        document.addEventListener('click', (e) => {
+            if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) {
+                dropdownEl.classList.add('hidden');
+                activeIdx = -1;
             }
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            if (currentRenderedItems.length > 0) {
-                activeHighlightIndex = (activeHighlightIndex - 1 + currentRenderedItems.length) % currentRenderedItems.length;
-                updateHighlight();
-            }
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (activeHighlightIndex >= 0 && activeHighlightIndex < currentRenderedItems.length) {
-                selectStand(currentRenderedItems[activeHighlightIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            dropdown.classList.add('hidden');
-            activeHighlightIndex = -1;
+        });
+    }
+
+    // Setup Origin Combobox
+    setupCombobox({
+        inputId: 'passenger-origin-search',
+        dropdownId: 'origin-autocomplete-dropdown',
+        clearBtnId: 'btn-clear-origin-search',
+        storageKey: 'busradar_passenger_from',
+        defaultVal: 'Yamuna Nagar Bus Stand',
+        onSelect: (item) => {
+            const ro = document.getElementById('live-route-origin');
+            if (ro) ro.textContent = item.name;
         }
     });
 
-    clearBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        clearBtn.classList.add('hidden');
-        const fallbackList = haryanaBusStands.length > 0 ? haryanaBusStands : stopsList;
-        renderSearchResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
-        searchInput.focus();
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
-            dropdown.classList.add('hidden');
-            activeHighlightIndex = -1;
+    // Setup Destination Combobox
+    setupCombobox({
+        inputId: 'passenger-stop-search',
+        dropdownId: 'stop-autocomplete-dropdown',
+        clearBtnId: 'btn-clear-search',
+        storageKey: 'busradar_passenger_to',
+        defaultVal: 'MMDU Campus Gate',
+        onSelect: (item) => {
+            const corridorMatch = stopsList.find(s => s.name.toLowerCase() === item.name.toLowerCase() || (s.name.includes(item.name) || item.name.includes(s.name)));
+            if (corridorMatch) {
+                selectedDestinationStop = corridorMatch;
+                map.panTo(corridorMatch.coords);
+            }
+            const rd = document.getElementById('live-route-dest');
+            if (rd) rd.textContent = item.name;
         }
     });
+
+    // Initialize UI states
+    fetchFleetAndUpdateUI();
+    updateTicketPassInfo();
 });
 </script>
 <script src="../i18n.js"></script>

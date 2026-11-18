@@ -95,3 +95,31 @@
 * **Helps for college project because:** A transit app that cannot recognize real Haryana bus stand names is a demo, not a product. Autocomplete over the official Haryana Roadways stand list is exactly the kind of real-world data integration judges look for under feasibility and impact.
 * **Undo:** `git checkout -- data/haryana_bus_stands.json server.py stitch_busradar/search_booking_dashboard/code.html stitch_busradar/driver_telemetry_dashboard/code.html` (and delete `data/haryana_bus_stands.json` if it did not exist before)
 * **Verification:** Verified in real Brave across desktop (1280x800) and mobile (iPhone 12: 390x844); typed "amb" and "his" in both portals; confirmed dropdown renders 8 ranked suggestions; confirmed selection fills input and updates live route badges; verified live GPS telemetry and GTFS/health endpoints; all 36 pytest tests passed (100%).
+
+### Change 11 — Multi-Change Suite: Dynamic From/To Selection, Vehicle Registration, Synchronous Fleet Updates, 5 Seeded Regional Buses & Bus 2002 OTP Fix
+* **Files touched:**
+  - `server.py`
+  - `stitch_busradar/search_booking_dashboard/code.html`
+  - `stitch_busradar/otp_system/code.html`
+  - `tests/test_simulation_guard.py`
+  - `tests/test_multichange_fleet.py`
+  - `verify_multichange_in_brave.py`
+* **Requirements Addressed & What Changed:**
+  1. **Requirement 1 (Passenger From/To + Dynamic Ticketing):** Added a dedicated "From" (Origin) combobox above "To" (Destination) wired to Haryana bus stand autocomplete with Fuse.js and debouncing. Dynamic ticketing modal calculates route `{From} → {To}` with distance-based / flat transit fare, requires both endpoints before generating digital pass, and persists From/To inputs in `localStorage`.
+  2. **Requirement 2 (Driver Vehicle Registration):** Added "Register new vehicle" interactive modal/card in `otp_system/code.html` with regex validation (`^[A-Z]{2}-\d{2}-[A-Z]{1,2}-\d{4}$`), driver name, route selector, and clear OTP rule notice ("Your 4-digit OTP is the last 4 digits of your vehicle number"). Added backend endpoint `POST /api/driver/register` (rate-limited 30/min, 409 conflict check, last-4-digit OTP derivation, does not return raw PIN).
+  3. **Requirement 3 (Synchronous Fleet Updates over WebSocket):** Backend broadcasts `FLEET_UPDATED` WebSocket event when a vehicle is registered or route is updated. Passenger portal subscribes to WebSocket and automatically updates `/api/fleet` and the bottom drawer fleet ribbon within 5 seconds without page refresh.
+  4. **Requirement 4 (Seeded 5 More Regional Buses):** Seeded 5 additional Haryana Roadways buses: `HR-02-A-4004` (4004), `HR-02-B-5005` (5005), `HR-02-C-6006` (6006), `HR-02-D-7007` (7007), and `HR-02-E-8008` (8008). Fleet count is at least 8 buses across Yamuna Nagar, Ambala, Chandigarh, Karnal, Panipat, Hisar, Rohtak, Gurugram, and Faridabad.
+  5. **Requirement 5 (Fix Bus 2002 OTP Login):** Enforced the rule that OTP is strictly the last 4 digits of the vehicle number for all buses (`HR-02-B-2002` -> `2002`). Updated `POST /api/driver/auth` to dynamically authenticate with trailing 4 digits. Added startup self-check `_verify_seeded_buses_pins()` verifying hashes on boot.
+* **Helps for college project because:**
+  - Moves BusRadar from a single corridor pilot to a realistic multi-corridor transit network.
+  - Allows professors and evaluators to register any demo vehicle on the fly from their phone and test real-time synchronization on the passenger map without code modifications.
+  - Fixes credential discrepancies ensuring any seeded or registered bus can be demonstrated without friction.
+* **Undo command:**
+  ```powershell
+  git checkout -- server.py stitch_busradar/search_booking_dashboard/code.html stitch_busradar/otp_system/code.html tests/test_simulation_guard.py tests/test_multichange_fleet.py verify_multichange_in_brave.py
+  ```
+* **Verification:**
+  - Automated Brave browser test suite `verify_multichange_in_brave.py` executed with exit code 0.
+  - All 11 visual screenshots captured in `multichange_screenshots/`: `R1_from_to_empty.png`, `R1_from_to_filled.png`, `R1_ticket_dynamic.png`, `R1_persist.png`, `R2_login_with_register_option.png`, `R2_register_form.png`, `R2_register_success.png`, `R2_new_vehicle_login.png`, `R3_passenger_sees_new_bus.png`, `R4_fleet_list.png`, `R5_2002_login_success.png`.
+  - All 41 automated pytest unit & integration tests passing (100%).
+  - Zero UI redesign: look and feel preserved exactly.

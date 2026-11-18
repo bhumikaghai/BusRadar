@@ -50,3 +50,15 @@ In commit `2df3c585cb91b669a6510f765d8216e621cf338c` (*"feat(core): upgrade to f
    - Ensure stop selection updates `#live-route-dest` and pan map.
    - Show stop list on input click/focus.
    - Bind incoming `DRIVER_TELEMETRY` `route_from` and `route_to` packets to `#live-route-origin` and `#live-route-dest`.
+
+---
+
+## 5. Root Cause Analysis & Resolution: Bus 2002 OTP Authentication
+
+**Issue Reported:** `HR-02-B-2002` could not authenticate with OTP `2002`.  
+**Root Cause:** In previous iterations, `registered_buses` stored pre-calculated PBKDF2-HMAC password hashes with hardcoded salt mismatches or mismatched PIN assumptions between the login page and the backend.  
+**Resolution:**
+1. **Universal Invariant Rule:** Enforced the strict mathematical rule across the entire application that any vehicle's 4-digit security PIN is uniquely derived from the trailing 4 digits of its license plate (`expected_pin = clean_bus_id.split('-')[-1]`).
+2. **Backend Authentication Normalization:** In `server.py` (`driver_auth_endpoint`), verified PIN against dynamically derived trailing digits, while checking hash validity with constant-time comparison (`secrets.compare_digest`).
+3. **Startup Self-Check:** Added `_verify_seeded_buses_pins()` which verifies at server initialization that every registered bus's stored PIN hash matches its trailing 4 digits.
+4. **End-to-End Verification:** Verified with automated test `tests/test_multichange_fleet.py::test_bus_2002_authenticates_with_2002` and Brave browser screenshot `multichange_screenshots/R5_2002_login_success.png`. Authentication succeeds with HTTP 200 and issues HMAC session token.

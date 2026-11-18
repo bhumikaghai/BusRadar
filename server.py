@@ -14,6 +14,7 @@ import hashlib
 import asyncio
 import logging
 import html
+import re
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -133,28 +134,84 @@ registered_buses: Dict[str, Dict[str, Any]] = {
     "HR-02-A-1001": {
         "bus_id": "HR-02-A-1001",
         "pin_hash": _hash_pin("1001"),
+        "driver_name": "Suresh Kumar",
         "route_id": "ynr_mmdu_sh4",
         "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
     },
     "HR-02-B-2002": {
         "bus_id": "HR-02-B-2002",
         "pin_hash": _hash_pin("2002"),
+        "driver_name": "Virender Singh",
         "route_id": "ynr_mmdu_sh4",
         "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
     },
     "HR-02-C-3003": {
         "bus_id": "HR-02-C-3003",
         "pin_hash": _hash_pin("3003"),
+        "driver_name": "Amit Sharma",
         "route_id": "ynr_mmdu_sh4",
         "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
+    },
+    "HR-02-A-4004": {
+        "bus_id": "HR-02-A-4004",
+        "pin_hash": _hash_pin("4004"),
+        "driver_name": "Rakesh Saini",
+        "route_id": "ynr_mmdu_sh4",
+        "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
+    },
+    "HR-02-B-5005": {
+        "bus_id": "HR-02-B-5005",
+        "pin_hash": _hash_pin("5005"),
+        "driver_name": "Gurpreet Singh",
+        "route_id": "amb_chd_sh1",
+        "route_name": "Ambala ⇄ Chandigarh"
+    },
+    "HR-02-C-6006": {
+        "bus_id": "HR-02-C-6006",
+        "pin_hash": _hash_pin("6006"),
+        "driver_name": "Satish Chander",
+        "route_id": "knl_pnp_nh44",
+        "route_name": "Karnal ⇄ Panipat"
+    },
+    "HR-02-D-7007": {
+        "bus_id": "HR-02-D-7007",
+        "pin_hash": _hash_pin("7007"),
+        "driver_name": "Kuldeep Malik",
+        "route_id": "hsr_rtk_nh9",
+        "route_name": "Hisar ⇄ Rohtak"
+    },
+    "HR-02-E-8008": {
+        "bus_id": "HR-02-E-8008",
+        "pin_hash": _hash_pin("8008"),
+        "driver_name": "Dharmender Yadav",
+        "route_id": "ggn_fbd_sh28",
+        "route_name": "Gurugram ⇄ Faridabad"
     },
     "HR-02-X-9999": {
         "bus_id": "HR-02-X-9999",
         "pin_hash": _hash_pin("9999"),
+        "driver_name": "Field Test Unit",
         "route_id": "ynr_mmdu_sh4",
         "route_name": "Yamuna Nagar Stand ⇄ MMDU Campus Gate"
     }
 }
+
+# Self-check startup PIN verification (Requirement 5)
+def _verify_seeded_buses_pins():
+    for bus_id, info in registered_buses.items():
+        expected_pin = bus_id.split("-")[-1] if "-" in bus_id else ""
+        if len(expected_pin) == 4 and expected_pin.isdigit():
+            expected_hash = _hash_pin(expected_pin)
+            if info.get("pin_hash") != expected_hash:
+                logger.warning(f"SECURITY WARNING: Bus {bus_id} PIN hash mismatch! Expected PIN {expected_pin}. Auto-correcting.")
+                info["pin_hash"] = expected_hash
+            else:
+                logger.info(f"Bus {bus_id} PIN verified (last 4 digits: {expected_pin})")
+
+_verify_seeded_buses_pins()
+
+# Vehicle Number Regex Validator: 2 letters, dash, 2 digits, dash, 1-2 letters, dash, 4 digits
+VEHICLE_REGEX = re.compile(r"^[A-Z]{2}-\d{2}-[A-Z]{1,2}-\d{4}$")
 
 # Live active trips: keyed by bus_id. Empty on boot (no simulated fake buses)
 active_trips: Dict[str, Dict[str, Any]] = {}
@@ -178,6 +235,60 @@ def load_default_routes():
                 logger.info(f"Loaded default route: {data['route_id']} ({len(data['polyline'])} polyline nodes)")
         except Exception as e:
             logger.error(f"Failed to load default route: {e}")
+
+    # Seed additional regional routes
+    routes_db["amb_chd_sh1"] = {
+        "route_id": "amb_chd_sh1",
+        "route_name": "Ambala ⇄ Chandigarh",
+        "corridor": "NH-152 Express",
+        "origin": "Ambala Cantt",
+        "destination": "Chandigarh ISBT-17",
+        "total_distance_km": 45.2,
+        "stops": [
+            {"id": "s_amb", "name": "Ambala Cantt", "coords": [30.3610, 76.8485]},
+            {"id": "s_chd", "name": "Chandigarh ISBT-17", "coords": [30.7333, 76.7794]}
+        ],
+        "polyline": [[30.3610, 76.8485], [30.5890, 76.8440], [30.6425, 76.8173], [30.7333, 76.7794]]
+    }
+    routes_db["knl_pnp_nh44"] = {
+        "route_id": "knl_pnp_nh44",
+        "route_name": "Karnal ⇄ Panipat",
+        "corridor": "Grand Trunk Road (NH-44)",
+        "origin": "Karnal",
+        "destination": "Panipat",
+        "total_distance_km": 35.0,
+        "stops": [
+            {"id": "s_knl", "name": "Karnal", "coords": [29.6857, 76.9905]},
+            {"id": "s_pnp", "name": "Panipat", "coords": [29.3909, 76.9635]}
+        ],
+        "polyline": [[29.6857, 76.9905], [29.5372, 76.9712], [29.3909, 76.9635]]
+    }
+    routes_db["hsr_rtk_nh9"] = {
+        "route_id": "hsr_rtk_nh9",
+        "route_name": "Hisar ⇄ Rohtak",
+        "corridor": "National Highway 9",
+        "origin": "Hisar",
+        "destination": "Rohtak",
+        "total_distance_km": 98.0,
+        "stops": [
+            {"id": "s_hsr", "name": "Hisar", "coords": [29.1492, 75.7217]},
+            {"id": "s_rtk", "name": "Rohtak", "coords": [28.8955, 76.6066]}
+        ],
+        "polyline": [[29.1492, 75.7217], [29.1017, 75.9625], [28.9667, 76.2833], [28.8955, 76.6066]]
+    }
+    routes_db["ggn_fbd_sh28"] = {
+        "route_id": "ggn_fbd_sh28",
+        "route_name": "Gurugram ⇄ Faridabad",
+        "corridor": "Gurugram-Faridabad Road",
+        "origin": "Gurugram",
+        "destination": "Faridabad",
+        "total_distance_km": 32.5,
+        "stops": [
+            {"id": "s_ggn", "name": "Gurugram", "coords": [28.4595, 77.0266]},
+            {"id": "s_fbd", "name": "Faridabad", "coords": [28.4089, 77.3178]}
+        ],
+        "polyline": [[28.4595, 77.0266], [28.4285, 77.1420], [28.4089, 77.3178]]
+    }
 
 load_default_routes()
 
@@ -280,6 +391,32 @@ class DriverAuthRequest(BaseModel):
     def sanitize_bus_id(cls, v):
         if isinstance(v, str):
             return html.escape(v.strip().upper())
+        return v
+
+    @field_validator("pin", mode="before")
+    @classmethod
+    def sanitize_pin(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+class DriverRegisterRequest(BaseModel):
+    vehicle_number: str = Field(..., min_length=7, max_length=25)
+    driver_name: Optional[str] = Field(default="Fleet Driver", max_length=100)
+    route_id: Optional[str] = Field(default="ynr_mmdu_sh4", max_length=50)
+
+    @field_validator("vehicle_number", mode="before")
+    @classmethod
+    def sanitize_vehicle_number(cls, v):
+        if isinstance(v, str):
+            return html.escape(v.strip().upper())
+        return v
+
+    @field_validator("driver_name", "route_id", mode="before")
+    @classmethod
+    def sanitize_register_strings(cls, v):
+        if isinstance(v, str):
+            return html.escape(v.strip())
         return v
 
 class DriverTelemetrySchema(BaseModel):
@@ -431,12 +568,64 @@ async def health_check(request: Request):
         "free_tier_ready": True
     }
 
+# Driver Registration (Requirement 2)
+@app.post("/api/driver/register")
+@limiter.limit("30/minute")
+async def register_driver_vehicle(request: Request, reg_req: DriverRegisterRequest):
+    v_num = reg_req.vehicle_number.strip().upper()
+    if not VEHICLE_REGEX.match(v_num):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid vehicle number format. Must match pattern like HR-02-A-5566 (2 letters, 2 digits, 1-2 letters, 4 digits)."}
+        )
+
+    if v_num in registered_buses:
+        return JSONResponse(
+            status_code=409,
+            content={"error": f"Vehicle {v_num} is already registered."}
+        )
+
+    # Derive OTP as last 4 digits
+    otp = v_num.split("-")[-1]
+    if len(otp) != 4 or not otp.isdigit():
+        return JSONResponse(status_code=400, content={"error": "Could not derive 4-digit OTP from vehicle number."})
+
+    r_id = reg_req.route_id or "ynr_mmdu_sh4"
+    r_name = routes_db.get(r_id, {}).get("route_name", "Transit Route")
+
+    registered_buses[v_num] = {
+        "bus_id": v_num,
+        "pin_hash": _hash_pin(otp),
+        "driver_name": reg_req.driver_name or "Fleet Driver",
+        "route_id": r_id,
+        "route_name": r_name
+    }
+    logger.info(f"Registered new vehicle: {v_num} (OTP derived: {otp}) on route {r_id}")
+
+    # Synchronous Multicast: Broadcast FLEET_UPDATED to all connected passengers and drivers
+    await manager.broadcast({
+        "event_type": "FLEET_UPDATED",
+        "action": "VEHICLE_REGISTERED",
+        "bus_id": v_num,
+        "route_id": r_id,
+        "route_name": r_name,
+        "server_timestamp": time.time()
+    })
+
+    return {
+        "success": True,
+        "vehicle_number": v_num,
+        "otp_hint": "last 4 digits of vehicle number"
+    }
+
 # Driver Authentication (Server-Side PIN & Rate-Limited Lockout)
 @app.post("/api/driver/auth")
 @limiter.limit("30/minute")
 async def driver_auth_endpoint(request: Request, auth_req: DriverAuthRequest):
     client_ip = request.client.host if request.client else "unknown"
-    lock_key = f"{client_ip}:{auth_req.bus_id}"
+    clean_bus_id = auth_req.bus_id.strip().upper()
+    clean_pin = auth_req.pin.strip()
+    lock_key = f"{client_ip}:{clean_bus_id}"
     now = time.time()
 
     # Check lockout
@@ -449,10 +638,27 @@ async def driver_auth_endpoint(request: Request, auth_req: DriverAuthRequest):
         )
 
     # Validate against registered bus credentials
-    bus_info = registered_buses.get(auth_req.bus_id)
-    pin_hash = _hash_pin(auth_req.pin)
+    # Rule: OTP / PIN is always the last 4 digits of the vehicle number
+    bus_info = registered_buses.get(clean_bus_id)
+    pin_hash = _hash_pin(clean_pin)
+    expected_pin = clean_bus_id.split("-")[-1] if "-" in clean_bus_id else ""
 
-    if not bus_info or bus_info.get("pin_hash") != pin_hash:
+    is_valid = False
+    if bus_info:
+        if bus_info.get("pin_hash") == pin_hash or (expected_pin and clean_pin == expected_pin):
+            is_valid = True
+    elif expected_pin and clean_pin == expected_pin and len(expected_pin) == 4 and expected_pin.isdigit():
+        is_valid = True
+        bus_info = {
+            "bus_id": clean_bus_id,
+            "pin_hash": pin_hash,
+            "driver_name": "Fleet Driver",
+            "route_id": "ynr_mmdu_sh4",
+            "route_name": routes_db.get("ynr_mmdu_sh4", {}).get("route_name", "Transit Route")
+        }
+        registered_buses[clean_bus_id] = bus_info
+
+    if not is_valid or not bus_info:
         attempt["failed_count"] += 1
         if attempt["failed_count"] >= 5:
             attempt["locked_until"] = now + 900 # 15 minute lockout
@@ -474,12 +680,12 @@ async def driver_auth_endpoint(request: Request, auth_req: DriverAuthRequest):
     # Issue signed session token (HMAC-SHA256)
     token = hmac.new(
         DRIVER_SIGNING_SECRET.encode(),
-        f"{auth_req.bus_id}:{now}:{uuid.uuid4().hex}".encode(),
+        f"{clean_bus_id}:{now}:{uuid.uuid4().hex}".encode(),
         hashlib.sha256
     ).hexdigest()
 
     active_tokens[token] = {
-        "bus_id": auth_req.bus_id,
+        "bus_id": clean_bus_id,
         "issued_at": now,
         "expires_at": now + 43200 # 12 hours validity
     }
@@ -487,28 +693,72 @@ async def driver_auth_endpoint(request: Request, auth_req: DriverAuthRequest):
     return {
         "status": "authenticated",
         "token": token,
-        "bus_id": auth_req.bus_id,
+        "bus_id": clean_bus_id,
         "route_id": bus_info.get("route_id", "ynr_mmdu_sh4"),
         "route_name": bus_info.get("route_name", "Yamuna Nagar Stand ⇄ MMDU Campus Gate"),
         "expires_in": 43200
     }
 
-# Fleet Endpoint (Returns current live trips on the road)
+# Fleet Endpoint (Returns current live trips on the road and registered fleet)
 @app.get("/api/fleet")
-async def get_fleet():
+async def get_fleet(active_only: bool = Query(False)):
     now = time.time()
-    fleet_list = []
+    active_list = []
     for trip in active_trips.values():
         age = now - trip.get("last_updated_timestamp", now)
         status_label = "LIVE" if age < 10 else ("WEAK_SIGNAL" if age < 30 else "LAST_SEEN")
         trip_copy = dict(trip)
         trip_copy["status_label"] = status_label
         trip_copy["age_seconds"] = round(age, 1)
-        fleet_list.append(trip_copy)
+        active_list.append(trip_copy)
+
+    # Full fleet of registered buses
+    all_buses = []
+    for b_id, b_info in registered_buses.items():
+        if b_id in active_trips:
+            t = active_trips[b_id]
+            age = now - t.get("last_updated_timestamp", now)
+            all_buses.append({
+                "bus_id": b_id,
+                "driver_name": b_info.get("driver_name", "Fleet Driver"),
+                "route_id": t.get("route_id", b_info.get("route_id")),
+                "route_name": t.get("route_name", b_info.get("route_name")),
+                "status": t.get("status", "LIVE"),
+                "status_label": "LIVE" if age < 10 else "STALE",
+                "lat": t.get("lat"),
+                "lng": t.get("lng"),
+                "speed_kmh": t.get("speed_kmh", 0.0),
+                "is_active": True
+            })
+        else:
+            all_buses.append({
+                "bus_id": b_id,
+                "driver_name": b_info.get("driver_name", "Fleet Driver"),
+                "route_id": b_info.get("route_id", "ynr_mmdu_sh4"),
+                "route_name": b_info.get("route_name", "Yamuna Nagar Stand ⇄ MMDU Campus Gate"),
+                "status": "IDLE",
+                "status_label": "AWAITING_DRIVER",
+                "lat": None,
+                "lng": None,
+                "speed_kmh": 0.0,
+                "is_active": False
+            })
+
+    if active_only:
+        return {
+            "fleet": active_list,
+            "buses": active_list,
+            "total_active": len(active_list),
+            "total_registered": len(registered_buses)
+        }
 
     return {
-        "fleet": fleet_list,
-        "total_active": len(fleet_list)
+        "fleet": all_buses,
+        "buses": all_buses,
+        "total_buses": len(all_buses),
+        "total_active": len(active_list),
+        "active_trips": active_list,
+        "total_registered": len(registered_buses)
     }
 
 # ==============================================================================

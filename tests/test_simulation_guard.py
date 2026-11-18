@@ -21,7 +21,8 @@ def test_fleet_starts_empty_without_simulation(client):
     assert res.status_code == 200
     data = res.json()
     assert data["total_active"] == 0
-    assert len(data["fleet"]) == 0
+    assert len(data.get("active_trips", [])) == 0
+    assert len(data["fleet"]) >= 8
 
 def test_passenger_websocket_sees_no_ghost_buses(client):
     """Verify that a connecting passenger sees an empty active_trips list."""
