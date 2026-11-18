@@ -584,6 +584,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         livePlateEl.textContent = busId + (isSim ? " [SIM]" : "");
         liveSpeedEl.textContent = `${data.speed_kmh || 0} km/h`;
+
+        if (data.route_from) {
+            const ro = document.getElementById('live-route-origin');
+            if (ro) ro.textContent = data.route_from;
+        }
+        if (data.route_to) {
+            const rd = document.getElementById('live-route-dest');
+            if (rd) rd.textContent = data.route_to;
+        }
     }
 
     // 8. Explicit Simulation Controls (OFF BY DEFAULT - ONLY USER TRIGGERED)
@@ -725,34 +734,43 @@ document.addEventListener('DOMContentLoaded', function () {
         dropdown.classList.remove('hidden');
 
         dropdown.querySelectorAll('li').forEach(el => {
-            el.addEventListener('click', function () {
-                const stopId = this.getAttribute('data-id');
+            const onSelect = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const stopId = el.getAttribute('data-id');
                 const matched = stopsList.find(s => s.id === stopId);
                 if (matched) {
                     selectedDestinationStop = matched;
                     searchInput.value = matched.name;
                     dropdown.classList.add('hidden');
                     map.panTo(matched.coords);
+                    const liveDestEl = document.getElementById('live-route-dest');
+                    if (liveDestEl) liveDestEl.textContent = matched.name;
                 }
-            });
+            };
+            el.addEventListener('click', onSelect);
+            el.addEventListener('touchend', onSelect);
         });
     }
 
-    searchInput.addEventListener('input', () => {
+    const triggerSearch = () => {
         const query = searchInput.value.trim();
         if (query.length > 0) {
             clearBtn.classList.remove('hidden');
             renderSearchResults(fuse.search(query));
         } else {
-            clearBtn.classList.add('hidden');
-            dropdown.classList.add('hidden');
+            renderSearchResults(stopsList.map(s => ({ item: s })));
         }
-    });
+    };
+
+    searchInput.addEventListener('input', triggerSearch);
+    searchInput.addEventListener('focus', triggerSearch);
+    searchInput.addEventListener('click', triggerSearch);
 
     clearBtn.addEventListener('click', () => {
         searchInput.value = '';
         clearBtn.classList.add('hidden');
-        dropdown.classList.add('hidden');
+        renderSearchResults(stopsList.map(s => ({ item: s })));
         searchInput.focus();
     });
 

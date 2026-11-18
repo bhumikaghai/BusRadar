@@ -69,3 +69,18 @@
   ```powershell
   git checkout -- tests/test_gtfs_and_concurrency.py
   ```
+
+### Change 9 — Fix origin/destination selection on driving portal and passenger search
+* **Files touched:**
+  - `stitch_busradar/driver_telemetry_dashboard/code.html`
+  - `stitch_busradar/search_booking_dashboard/code.html`
+* **Root cause:** Regression from commit `2df3c585` (Category G + C + D) where interactive starting and destination comboboxes (`#start-stop` and `#dest-stop`) were removed and replaced with static `<span>` text, deleting Fuse.js and `setupDriverCombobox`, and hardcoding `route_from` and `route_to` in the telemetry packet. Additionally, passenger stop selection failed to sync with the journey drawer's `#live-route-dest` and lacked click-to-open on input focus.
+* **What changed:**
+  - Restored Fuse.js autocomplete library in `<head>` of `driver_telemetry_dashboard/code.html`.
+  - Added interactive `#start-stop` (From / Starting Stop) and `#dest-stop` (To / Destination) comboboxes within the Active Route Card with dropdowns and clear buttons matching the native dark theme.
+  - Implemented `setupDriverCombobox` with dual `click` and `touchend` handlers for mobile viewport compatibility.
+  - Dynamically bound `currentStartStop` and `currentDestStop` to live `#display-start-stop`, `#display-dest-stop`, and WebSocket `DRIVER_TELEMETRY` packets.
+  - In `search_booking_dashboard/code.html`, synchronized stop selection to update `#live-route-dest` and added click/focus trigger to display corridor stops immediately.
+* **Helps for college project because:** A working origin/destination selector is baseline usability — a transit app that cannot accept a trip request or allow the driver to specify their route endpoints cannot be demoed or judged on impact/UX.
+* **Undo:** `git checkout -- stitch_busradar/driver_telemetry_dashboard/code.html stitch_busradar/search_booking_dashboard/code.html`
+* **Verification:** Tested in Brave across desktop (1280x800) and mobile (iPhone 12: 390x844), confirming start stop and destination stop selection, UI text update, dropdown search, and telemetry packet dispatch.

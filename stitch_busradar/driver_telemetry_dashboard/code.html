@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link rel="manifest" href="/manifest.json"/>
+<!-- Fuse.js CDN for Typo-Tolerant Autocomplete Search -->
+<script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
 <!-- Leaflet.js for Route Recording Preview -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -75,7 +77,7 @@
 <div class="flex-1 overflow-y-auto px-4 flex flex-col gap-3.5 pb-6 pt-3">
     
     <!-- Active Route Card -->
-    <section class="bg-zinc-900 p-4 rounded-3xl flex flex-col gap-3 border border-zinc-800 shadow-sm relative z-10">
+    <section class="bg-zinc-900 p-4 rounded-3xl flex flex-col gap-3 border border-zinc-800 shadow-sm relative z-30">
         <div class="flex items-center justify-between">
             <span class="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider">ASSIGNED VEHICLE</span>
             <span id="display-bus-plate" class="text-sm font-mono font-black text-green-400 bg-black px-2.5 py-1 rounded-xl border border-zinc-800">HR-02-A-1001</span>
@@ -84,11 +86,42 @@
         <div class="flex flex-col gap-1">
             <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Active Corridor</span>
             <div class="text-sm font-extrabold text-white flex items-center gap-1.5" id="display-route-name">
-                <span>Yamuna Nagar Stand</span>
+                <span id="display-start-stop">Yamuna Nagar Bus Stand</span>
                 <span class="text-green-400">➔</span>
-                <span>MMDU Campus Gate</span>
+                <span id="display-dest-stop">MMDU Campus Gate</span>
             </div>
             <span class="text-[11px] text-zinc-400 font-medium">State Highway 4 &bull; Distance ~28.4 km</span>
+        </div>
+
+        <!-- Dual Origin & Destination Stop Selectors -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-zinc-800/80">
+            <!-- 1. FROM (Starting Stop) -->
+            <div class="flex flex-col gap-1 relative z-30">
+                <label data-i18n="driver_from_label" class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">From (Starting Stop)</label>
+                <div class="flex items-center bg-black rounded-xl border border-zinc-800 focus-within:border-green-400 transition-all h-12 px-3">
+                    <span class="material-symbols-outlined text-green-400 mr-2 text-[18px]">trip_origin</span>
+                    <input id="start-stop" data-i18n-ph="driver_from_ph" class="w-full bg-transparent border-none p-0 text-xs font-semibold text-white placeholder-zinc-500 focus:ring-0 focus:outline-none" placeholder="Search Origin: Yamuna Nagar..." type="text" value="Yamuna Nagar Bus Stand" autocomplete="off"/>
+                    <button id="btn-clear-start" class="text-zinc-500 hover:text-white cursor-pointer flex items-center" type="button">
+                        <span class="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                </div>
+                <!-- Dropdown -->
+                <div id="start-stop-dropdown" class="hidden absolute top-full left-0 w-full mt-1 bg-zinc-950 rounded-xl shadow-2xl border border-zinc-800 overflow-hidden z-50 max-h-48 overflow-y-auto divide-y divide-zinc-900"></div>
+            </div>
+
+            <!-- 2. TO (Destination Stop) -->
+            <div class="flex flex-col gap-1 relative z-20">
+                <label data-i18n="driver_to_label" class="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">To (Destination)</label>
+                <div class="flex items-center bg-black rounded-xl border border-zinc-800 focus-within:border-green-400 transition-all h-12 px-3">
+                    <span class="material-symbols-outlined text-green-400 mr-2 text-[18px]">location_on</span>
+                    <input id="dest-stop" data-i18n-ph="driver_to_ph" class="w-full bg-transparent border-none p-0 text-xs font-semibold text-white placeholder-zinc-500 focus:ring-0 focus:outline-none" placeholder="Search Destination: MMDU..." type="text" value="MMDU Campus Gate" autocomplete="off"/>
+                    <button id="btn-clear-dest" class="text-zinc-500 hover:text-white cursor-pointer flex items-center" type="button">
+                        <span class="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                </div>
+                <!-- Dropdown -->
+                <div id="dest-stop-dropdown" class="hidden absolute top-full left-0 w-full mt-1 bg-zinc-950 rounded-xl shadow-2xl border border-zinc-800 overflow-hidden z-50 max-h-48 overflow-y-auto divide-y divide-zinc-900"></div>
+            </div>
         </div>
 
         <!-- Live GPS Accuracy & Status Meter -->
@@ -301,6 +334,121 @@ document.addEventListener('DOMContentLoaded', function () {
     const delayNotice = document.getElementById('delay-broadcast-notice');
     const delayNoticeText = document.getElementById('delay-notice-text');
 
+    // Stop Selection & Autocomplete Combobox Engine
+    const transitLocations = [
+        { name: "Yamuna Nagar Bus Stand", name_hi: "यमुनानगर बस स्टैंड", subtitle: "Main Inter-State Terminal, SH-4", type: "Terminal" },
+        { name: "Jagadhri Bus Stand", name_hi: "जगाधरी बस स्टैंड", subtitle: "City Transit Hub, SH-4", type: "Stop" },
+        { name: "Kalanaur Chowk", name_hi: "कलानौर चौक", subtitle: "Highway Junction Stand", type: "Junction" },
+        { name: "Mustafabad (Saraswati Nagar)", name_hi: "मुस्तफ़ाबाद (सरस्वती नगर)", subtitle: "Station Road Junction", type: "Stop" },
+        { name: "Barara Junction Stand", name_hi: "बराड़ा जंक्शन स्टैंड", subtitle: "Key Junction & Halt Point", type: "Junction" },
+        { name: "Mullana Town Stand", name_hi: "मुल्लाना टाउन स्टैंड", subtitle: "Rural Transit Node, MMDU Road", type: "Stop" },
+        { name: "MMDU Campus Gate", name_hi: "एमएमडीयू कैंपस गेट", subtitle: "University Terminal, Ambala", type: "Terminal" }
+    ];
+
+    let currentStartStop = "Yamuna Nagar Bus Stand";
+    let currentDestStop = "MMDU Campus Gate";
+
+    const displayStartEl = document.getElementById('display-start-stop');
+    const displayDestEl = document.getElementById('display-dest-stop');
+
+    const fuseDriver = (typeof Fuse !== 'undefined') ? new Fuse(transitLocations, {
+        keys: ['name', 'name_hi', 'subtitle'],
+        threshold: 0.35,
+        distance: 100,
+        minMatchCharLength: 1
+    }) : null;
+
+    function setupDriverCombobox(inputId, clearBtnId, dropdownId, isOrigin) {
+        const input = document.getElementById(inputId);
+        const clearBtn = document.getElementById(clearBtnId);
+        const dropdown = document.getElementById(dropdownId);
+        if (!input || !dropdown) return;
+        const container = input.closest('.relative');
+
+        function renderResults(results) {
+            if (!results.length) {
+                dropdown.innerHTML = `
+                    <div class="px-3.5 py-2.5 text-xs text-zinc-500 text-center flex items-center justify-center gap-1.5">
+                        <span class="material-symbols-outlined text-[16px]">search_off</span>
+                        <span>No stop found.</span>
+                    </div>
+                `;
+                dropdown.classList.remove('hidden');
+                if (container) container.classList.add('!z-50');
+                return;
+            }
+
+            dropdown.innerHTML = results.map(({ item }) => `
+                <div class="combobox-item px-3.5 py-2 hover:bg-zinc-900 transition-colors cursor-pointer w-full group touch-manipulation flex items-center justify-between" data-name="${item.name}">
+                    <div class="truncate">
+                        <div class="text-xs font-bold text-white group-hover:text-green-400 transition-colors truncate">${item.name}</div>
+                        <div class="text-[10px] text-zinc-400 truncate">${item.name_hi ? item.name_hi + ' • ' : ''}${item.subtitle || ''}</div>
+                    </div>
+                    <span class="material-symbols-outlined text-[16px] text-zinc-600 group-hover:text-green-400">check_circle</span>
+                </div>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+            if (container) container.classList.add('!z-50');
+
+            dropdown.querySelectorAll('.combobox-item').forEach(el => {
+                const onSelect = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const selectedName = el.getAttribute('data-name');
+                    input.value = selectedName;
+                    dropdown.classList.add('hidden');
+                    if (container) container.classList.remove('!z-50');
+                    if (clearBtn) clearBtn.classList.remove('hidden');
+
+                    if (isOrigin) {
+                        currentStartStop = selectedName;
+                        if (displayStartEl) displayStartEl.textContent = selectedName;
+                    } else {
+                        currentDestStop = selectedName;
+                        if (displayDestEl) displayDestEl.textContent = selectedName;
+                    }
+                };
+                el.addEventListener('click', onSelect);
+                el.addEventListener('touchend', onSelect);
+            });
+        }
+
+        const triggerSearch = () => {
+            const query = input.value.trim();
+            if (query.length > 0 && fuseDriver) {
+                if (clearBtn) clearBtn.classList.remove('hidden');
+                renderResults(fuseDriver.search(query));
+            } else {
+                renderResults(transitLocations.map(item => ({ item })));
+            }
+        };
+
+        input.addEventListener('input', triggerSearch);
+        input.addEventListener('focus', triggerSearch);
+        input.addEventListener('click', triggerSearch);
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                input.value = '';
+                clearBtn.classList.add('hidden');
+                renderResults(transitLocations.map(item => ({ item })));
+                input.focus();
+            });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+                if (container) container.classList.remove('!z-50');
+            }
+        });
+    }
+
+    setupDriverCombobox('start-stop', 'btn-clear-start', 'start-stop-dropdown', true);
+    setupDriverCombobox('dest-stop', 'btn-clear-dest', 'dest-stop-dropdown', false);
+
     let isBroadcasting = false;
     let packetCount = 0;
     let sequenceNumber = 0;
@@ -468,8 +616,8 @@ document.addEventListener('DOMContentLoaded', function () {
             heading: heading,
             sequence_number: sequenceNumber,
             client_timestamp: now,
-            route_from: "Yamuna Nagar Stand",
-            route_to: "MMDU Campus Gate"
+            route_from: currentStartStop,
+            route_to: currentDestStop
         };
 
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -766,6 +914,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     heading: 85.0,
                     sequence_number: sequenceNumber,
                     client_timestamp: Date.now(),
+                    route_from: currentStartStop,
+                    route_to: currentDestStop,
                     is_simulation: true
                 }));
             }

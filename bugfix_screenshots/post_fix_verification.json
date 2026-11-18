@@ -1,0 +1,45 @@
+{
+  "driver_desktop": {
+    "status": "PASS",
+    "selected_start": "Barara Junction Stand",
+    "selected_dest": "Jagadhri Bus Stand",
+    "display_start": "Barara Junction Stand",
+    "display_dest": "Jagadhri Bus Stand",
+    "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\bugfix_screenshots\\driver_fixed_desktop.png"
+  },
+  "driver_mobile": {
+    "status": "PASS",
+    "selected_start": "Kalanaur Chowk",
+    "display_start": "Kalanaur Chowk",
+    "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\bugfix_screenshots\\driver_fixed_mobile.png"
+  },
+  "passenger_desktop": {
+    "status": "PASS",
+    "selected_dest": "Mustafabad Stand",
+    "bottom_card_dest": "Mustafabad Stand",
+    "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\bugfix_screenshots\\passenger_fixed_desktop.png"
+  },
+  "passenger_mobile": {
+    "status": "PASS",
+    "screenshot": "C:\\Users\\parth\\OneDrive\\Desktop\\BusRadar\\bugfix_screenshots\\passenger_fixed_mobile.png"
+  },
+  "regression_checks": {
+    "live_gps_only_intact": true,
+    "gtfs_and_health_endpoints_intact": true,
+    "driver_to_passenger_origin_dest_sync": true
+  },
+  "console_errors": {
+    "driver_desktop": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "driver_mobile": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "passenger_desktop": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ]
+  },
+  "all_passed": true
+}

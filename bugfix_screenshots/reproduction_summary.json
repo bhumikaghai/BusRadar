@@ -1,0 +1,37 @@
+{
+  "console_errors": {
+    "local_driver": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "local_passenger": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ],
+    "live_driver": [
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+      "[warning] cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+    ]
+  },
+  "failed_requests": {},
+  "page_observations": {
+    "local_driver": {
+      "start_selector_exists": false,
+      "dest_selector_exists": false,
+      "active_corridor_text": "Yamuna Nagar Stand\n\u2794\nMMDU Campus Gate",
+      "can_select_start": false,
+      "can_select_dest": false,
+      "bug_type": "selector_missing_replaced_with_static_text"
+    },
+    "local_passenger": {
+      "has_origin_selector": false,
+      "has_dest_selector": true,
+      "dest_selection_works": true
+    },
+    "live_driver": {
+      "accessible": true,
+      "start_selector_exists": false,
+      "dest_selector_exists": false,
+      "is_also_live": true
+    }
+  }
+}
