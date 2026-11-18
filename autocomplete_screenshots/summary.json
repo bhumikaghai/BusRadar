@@ -1,0 +1,12 @@
+{
+  "status": "SUCCESS",
+  "screenshots": [
+    "passenger_typing_amb.png",
+    "passenger_typing_his.png",
+    "passenger_selected.png",
+    "passenger_mobile.png",
+    "driver_typing_amb.png",
+    "driver_selected.png"
+  ],
+  "console_errors": []
+}

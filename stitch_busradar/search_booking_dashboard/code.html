@@ -701,55 +701,104 @@ document.addEventListener('DOMContentLoaded', function () {
 
     connectPassengerWebSocket();
 
-    // 8. Typo-Tolerant Fuzzy Stop Search (Fuse.js)
-    const fuse = new Fuse(stopsList, {
-        keys: ['name', 'name_hi'],
-        threshold: 0.4,
-        distance: 100,
-        minMatchCharLength: 1
-    });
+    // 8. Typo-Tolerant Haryana Bus Stand Fuzzy Search (Fuse.js)
+    let haryanaBusStands = [];
+    let passengerFuse = null;
+
+    function initPassengerFuse(stands) {
+        passengerFuse = new Fuse(stands, {
+            keys: ['name', 'aliases', 'district'],
+            threshold: 0.3,
+            distance: 100,
+            minMatchCharLength: 1
+        });
+    }
+
+    // Preload fallback corridor stops immediately, then hydrate full Haryana dataset from API
+    initPassengerFuse(stopsList.map(s => ({ name: s.name, district: 'Ambala', aliases: [s.name, s.name_hi], coords: s.coords })));
+
+    fetch('/api/bus-stands')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.stands && data.stands.length > 0) {
+                haryanaBusStands = data.stands;
+                initPassengerFuse(haryanaBusStands);
+            }
+        })
+        .catch(err => console.warn('Could not load Haryana bus stands dataset:', err));
 
     const searchInput = document.getElementById('passenger-stop-search');
     const dropdown = document.getElementById('stop-autocomplete-dropdown');
     const clearBtn = document.getElementById('btn-clear-search');
+    let activeHighlightIndex = -1;
+    let currentRenderedItems = [];
+
+    function selectStand(item) {
+        searchInput.value = item.name;
+        dropdown.classList.add('hidden');
+        activeHighlightIndex = -1;
+        clearBtn.classList.remove('hidden');
+
+        // Check if stand matches local corridor route for map centering
+        const corridorMatch = stopsList.find(s => s.name.toLowerCase() === item.name.toLowerCase() || (s.name.includes(item.name) || item.name.includes(s.name)));
+        if (corridorMatch) {
+            selectedDestinationStop = corridorMatch;
+            map.panTo(corridorMatch.coords);
+        }
+
+        const liveDestEl = document.getElementById('live-route-dest');
+        if (liveDestEl) liveDestEl.textContent = item.name;
+    }
 
     function renderSearchResults(results) {
+        activeHighlightIndex = -1;
+        currentRenderedItems = [];
+
         if (!results.length) {
             dropdown.innerHTML = `
-                <li class="px-4 py-2.5 text-xs text-slate-400 text-center">No stop found on this corridor</li>
+                <li class="px-4 py-2.5 text-xs text-slate-400 text-center">No bus stand found</li>
             `;
             dropdown.classList.remove('hidden');
             return;
         }
 
-        dropdown.innerHTML = results.map(({ item }) => `
-            <li class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between group" data-id="${item.id}">
-                <div>
-                    <div class="text-xs font-bold text-slate-800 group-hover:text-primary">${item.name}</div>
-                    <div class="text-[10px] text-slate-500">${item.name_hi}</div>
+        // Render up to 8 suggestions
+        const topResults = results.slice(0, 8);
+        currentRenderedItems = topResults.map(r => r.item || r);
+
+        dropdown.innerHTML = topResults.map(({ item }, idx) => `
+            <li class="passenger-suggest-item px-4 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between group transition-colors" data-idx="${idx}">
+                <div class="truncate mr-2">
+                    <div class="text-xs font-bold text-slate-800 group-hover:text-primary truncate">${item.name}</div>
+                    <div class="text-[10px] text-slate-500 truncate">${item.district ? item.district + ' District' : ''}${item.aliases && item.aliases.length ? ' • ' + item.aliases[0] : ''}</div>
                 </div>
                 <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-primary">check_circle</span>
             </li>
         `).join('');
         dropdown.classList.remove('hidden');
 
-        dropdown.querySelectorAll('li').forEach(el => {
+        dropdown.querySelectorAll('.passenger-suggest-item').forEach(el => {
+            const idx = parseInt(el.getAttribute('data-idx'), 10);
+            const item = currentRenderedItems[idx];
             const onSelect = function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                const stopId = el.getAttribute('data-id');
-                const matched = stopsList.find(s => s.id === stopId);
-                if (matched) {
-                    selectedDestinationStop = matched;
-                    searchInput.value = matched.name;
-                    dropdown.classList.add('hidden');
-                    map.panTo(matched.coords);
-                    const liveDestEl = document.getElementById('live-route-dest');
-                    if (liveDestEl) liveDestEl.textContent = matched.name;
-                }
+                selectStand(item);
             };
             el.addEventListener('click', onSelect);
             el.addEventListener('touchend', onSelect);
+        });
+    }
+
+    function updateHighlight() {
+        const items = dropdown.querySelectorAll('.passenger-suggest-item');
+        items.forEach((el, idx) => {
+            if (idx === activeHighlightIndex) {
+                el.classList.add('bg-blue-50', 'text-primary');
+                el.scrollIntoView({ block: 'nearest' });
+            } else {
+                el.classList.remove('bg-blue-50', 'text-primary');
+            }
         });
     }
 
@@ -757,26 +806,67 @@ document.addEventListener('DOMContentLoaded', function () {
         const query = searchInput.value.trim();
         if (query.length > 0) {
             clearBtn.classList.remove('hidden');
-            renderSearchResults(fuse.search(query));
+            if (passengerFuse) {
+                renderSearchResults(passengerFuse.search(query));
+            }
         } else {
-            renderSearchResults(stopsList.map(s => ({ item: s })));
+            const fallbackList = haryanaBusStands.length > 0 ? haryanaBusStands : stopsList;
+            renderSearchResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
         }
     };
 
-    searchInput.addEventListener('input', triggerSearch);
+    let debounceTimer = null;
+    const onInputDebounced = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            triggerSearch();
+        }, 150);
+    };
+
+    searchInput.addEventListener('input', onInputDebounced);
     searchInput.addEventListener('focus', triggerSearch);
     searchInput.addEventListener('click', triggerSearch);
+    searchInput.addEventListener('touchstart', triggerSearch, { passive: true });
+
+    // Keyboard navigation (ArrowUp, ArrowDown, Enter, Escape)
+    searchInput.addEventListener('keydown', (e) => {
+        if (dropdown.classList.contains('hidden')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (currentRenderedItems.length > 0) {
+                activeHighlightIndex = (activeHighlightIndex + 1) % currentRenderedItems.length;
+                updateHighlight();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (currentRenderedItems.length > 0) {
+                activeHighlightIndex = (activeHighlightIndex - 1 + currentRenderedItems.length) % currentRenderedItems.length;
+                updateHighlight();
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeHighlightIndex >= 0 && activeHighlightIndex < currentRenderedItems.length) {
+                selectStand(currentRenderedItems[activeHighlightIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+            activeHighlightIndex = -1;
+        }
+    });
 
     clearBtn.addEventListener('click', () => {
         searchInput.value = '';
         clearBtn.classList.add('hidden');
-        renderSearchResults(stopsList.map(s => ({ item: s })));
+        const fallbackList = haryanaBusStands.length > 0 ? haryanaBusStands : stopsList;
+        renderSearchResults(fallbackList.slice(0, 8).map(s => ({ item: s })));
         searchInput.focus();
     });
 
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
             dropdown.classList.add('hidden');
+            activeHighlightIndex = -1;
         }
     });
 });

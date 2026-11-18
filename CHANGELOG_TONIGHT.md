@@ -84,3 +84,14 @@
 * **Helps for college project because:** A working origin/destination selector is baseline usability — a transit app that cannot accept a trip request or allow the driver to specify their route endpoints cannot be demoed or judged on impact/UX.
 * **Undo:** `git checkout -- stitch_busradar/driver_telemetry_dashboard/code.html stitch_busradar/search_booking_dashboard/code.html`
 * **Verification:** Tested in Brave across desktop (1280x800) and mobile (iPhone 12: 390x844), confirming start stop and destination stop selection, UI text update, dropdown search, and telemetry packet dispatch.
+
+### Change 10 — Haryana bus stand autocomplete on passenger and driver portals
+* **Files touched:**
+  - `data/haryana_bus_stands.json`
+  - `server.py`
+  - `stitch_busradar/search_booking_dashboard/code.html`
+  - `stitch_busradar/driver_telemetry_dashboard/code.html`
+* **Root cause / gap closed:** No autocomplete existed; users had to type full stand names manually. Added a 154-entry Haryana bus stand dataset across all 22 districts, a `/api/bus-stands` endpoint with 5-minute in-memory cache, a prefix/substring ranked search endpoint `/api/bus-stands/search`, and Fuse.js fuzzy autocomplete with debouncing and keyboard navigation on both passenger and driver portals.
+* **Helps for college project because:** A transit app that cannot recognize real Haryana bus stand names is a demo, not a product. Autocomplete over the official Haryana Roadways stand list is exactly the kind of real-world data integration judges look for under feasibility and impact.
+* **Undo:** `git checkout -- data/haryana_bus_stands.json server.py stitch_busradar/search_booking_dashboard/code.html stitch_busradar/driver_telemetry_dashboard/code.html` (and delete `data/haryana_bus_stands.json` if it did not exist before)
+* **Verification:** Verified in real Brave across desktop (1280x800) and mobile (iPhone 12: 390x844); typed "amb" and "his" in both portals; confirmed dropdown renders 8 ranked suggestions; confirmed selection fills input and updates live route badges; verified live GPS telemetry and GTFS/health endpoints; all 36 pytest tests passed (100%).

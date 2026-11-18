@@ -351,12 +351,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const displayStartEl = document.getElementById('display-start-stop');
     const displayDestEl = document.getElementById('display-dest-stop');
 
-    const fuseDriver = (typeof Fuse !== 'undefined') ? new Fuse(transitLocations, {
-        keys: ['name', 'name_hi', 'subtitle'],
-        threshold: 0.35,
+    let driverBusStands = transitLocations.map(t => ({ name: t.name, district: 'Ambala', aliases: [t.name, t.name_hi || ''], subtitle: t.subtitle }));
+    let fuseDriver = (typeof Fuse !== 'undefined') ? new Fuse(driverBusStands, {
+        keys: ['name', 'aliases', 'district'],
+        threshold: 0.3,
         distance: 100,
         minMatchCharLength: 1
     }) : null;
+
+    fetch('/api/bus-stands')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.stands && data.stands.length > 0) {
+                driverBusStands = data.stands;
+                if (typeof Fuse !== 'undefined') {
+                    fuseDriver = new Fuse(driverBusStands, {
+                        keys: ['name', 'aliases', 'district'],
+                        threshold: 0.3,
+                        distance: 100,
+                        minMatchCharLength: 1
+                    });
+                }
+            }
+        })
+        .catch(err => console.warn('Could not load Haryana bus stands on driver portal:', err));
 
     function setupDriverCombobox(inputId, clearBtnId, dropdownId, isOrigin) {
         const input = document.getElementById(inputId);
@@ -364,13 +382,46 @@ document.addEventListener('DOMContentLoaded', function () {
         const dropdown = document.getElementById(dropdownId);
         if (!input || !dropdown) return;
         const container = input.closest('.relative');
+        let activeIdx = -1;
+        let renderedItems = [];
+
+        function selectItem(name) {
+            input.value = name;
+            dropdown.classList.add('hidden');
+            activeIdx = -1;
+            if (container) container.classList.remove('!z-50');
+            if (clearBtn) clearBtn.classList.remove('hidden');
+
+            if (isOrigin) {
+                currentStartStop = name;
+                if (displayStartEl) displayStartEl.textContent = name;
+            } else {
+                currentDestStop = name;
+                if (displayDestEl) displayDestEl.textContent = name;
+            }
+        }
+
+        function updateDriverHighlight() {
+            const items = dropdown.querySelectorAll('.combobox-item');
+            items.forEach((el, idx) => {
+                if (idx === activeIdx) {
+                    el.classList.add('bg-zinc-800', 'text-green-400');
+                    el.scrollIntoView({ block: 'nearest' });
+                } else {
+                    el.classList.remove('bg-zinc-800', 'text-green-400');
+                }
+            });
+        }
 
         function renderResults(results) {
+            activeIdx = -1;
+            renderedItems = [];
+
             if (!results.length) {
                 dropdown.innerHTML = `
                     <div class="px-3.5 py-2.5 text-xs text-zinc-500 text-center flex items-center justify-center gap-1.5">
                         <span class="material-symbols-outlined text-[16px]">search_off</span>
-                        <span>No stop found.</span>
+                        <span>No bus stand found</span>
                     </div>
                 `;
                 dropdown.classList.remove('hidden');
@@ -378,11 +429,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            dropdown.innerHTML = results.map(({ item }) => `
-                <div class="combobox-item px-3.5 py-2 hover:bg-zinc-900 transition-colors cursor-pointer w-full group touch-manipulation flex items-center justify-between" data-name="${item.name}">
-                    <div class="truncate">
+            const topResults = results.slice(0, 8);
+            renderedItems = topResults.map(r => r.item || r);
+
+            dropdown.innerHTML = topResults.map(({ item }, idx) => `
+                <div class="combobox-item px-3.5 py-2 hover:bg-zinc-900 transition-colors cursor-pointer w-full group touch-manipulation flex items-center justify-between" data-idx="${idx}" data-name="${item.name}">
+                    <div class="truncate mr-2">
                         <div class="text-xs font-bold text-white group-hover:text-green-400 transition-colors truncate">${item.name}</div>
-                        <div class="text-[10px] text-zinc-400 truncate">${item.name_hi ? item.name_hi + ' • ' : ''}${item.subtitle || ''}</div>
+                        <div class="text-[10px] text-zinc-400 truncate">${item.district ? item.district + ' District' : (item.subtitle || '')}${item.aliases && item.aliases.length ? ' • ' + item.aliases[0] : ''}</div>
                     </div>
                     <span class="material-symbols-outlined text-[16px] text-zinc-600 group-hover:text-green-400">check_circle</span>
                 </div>
@@ -396,18 +450,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     e.preventDefault();
                     e.stopPropagation();
                     const selectedName = el.getAttribute('data-name');
-                    input.value = selectedName;
-                    dropdown.classList.add('hidden');
-                    if (container) container.classList.remove('!z-50');
-                    if (clearBtn) clearBtn.classList.remove('hidden');
-
-                    if (isOrigin) {
-                        currentStartStop = selectedName;
-                        if (displayStartEl) displayStartEl.textContent = selectedName;
-                    } else {
-                        currentDestStop = selectedName;
-                        if (displayDestEl) displayDestEl.textContent = selectedName;
-                    }
+                    selectItem(selectedName);
                 };
                 el.addEventListener('click', onSelect);
                 el.addEventListener('touchend', onSelect);
@@ -420,20 +463,59 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (clearBtn) clearBtn.classList.remove('hidden');
                 renderResults(fuseDriver.search(query));
             } else {
-                renderResults(transitLocations.map(item => ({ item })));
+                const fallbackList = driverBusStands.length > 0 ? driverBusStands : transitLocations;
+                renderResults(fallbackList.slice(0, 8).map(item => ({ item })));
             }
         };
 
-        input.addEventListener('input', triggerSearch);
+        let debounceTimer = null;
+        const onInputDebounced = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                triggerSearch();
+            }, 150);
+        };
+
+        input.addEventListener('input', onInputDebounced);
         input.addEventListener('focus', triggerSearch);
         input.addEventListener('click', triggerSearch);
+        input.addEventListener('touchstart', triggerSearch, { passive: true });
+
+        // Keyboard navigation
+        input.addEventListener('keydown', (e) => {
+            if (dropdown.classList.contains('hidden')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (renderedItems.length > 0) {
+                    activeIdx = (activeIdx + 1) % renderedItems.length;
+                    updateDriverHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (renderedItems.length > 0) {
+                    activeIdx = (activeIdx - 1 + renderedItems.length) % renderedItems.length;
+                    updateDriverHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeIdx >= 0 && activeIdx < renderedItems.length) {
+                    selectItem(renderedItems[activeIdx].name);
+                }
+            } else if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+                activeIdx = -1;
+                if (container) container.classList.remove('!z-50');
+            }
+        });
 
         if (clearBtn) {
             clearBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 input.value = '';
                 clearBtn.classList.add('hidden');
-                renderResults(transitLocations.map(item => ({ item })));
+                const fallbackList = driverBusStands.length > 0 ? driverBusStands : transitLocations;
+                renderResults(fallbackList.slice(0, 8).map(item => ({ item })));
                 input.focus();
             });
         }
@@ -441,6 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.addEventListener('click', (e) => {
             if (!input.contains(e.target) && !dropdown.contains(e.target)) {
                 dropdown.classList.add('hidden');
+                activeIdx = -1;
                 if (container) container.classList.remove('!z-50');
             }
         });

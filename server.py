@@ -423,6 +423,7 @@ async def health_check(request: Request):
         "active_connections": len(manager.connections),
         "gtfs_rt_available": True,
         "gtfs_static_available": True,
+        "bus_stands_available": True,
         "simulation_enabled": SIMULATION_ENABLED,
         "registered_fleet_count": len(registered_buses),
         "active_fleet_summary": active_summary,
@@ -508,6 +509,80 @@ async def get_fleet():
     return {
         "fleet": fleet_list,
         "total_active": len(fleet_list)
+    }
+
+# ==============================================================================
+# HARYANA BUS STANDS & AUTOCOMPLETE SEARCH ENDPOINTS
+# ==============================================================================
+_bus_stands_cache: Dict[str, Any] = {"data": None, "timestamp": 0}
+
+def get_haryana_bus_stands() -> List[Dict[str, Any]]:
+    now = time.time()
+    if _bus_stands_cache["data"] is not None and (now - _bus_stands_cache["timestamp"] < 300):
+        return _bus_stands_cache["data"]
+
+    file_path = os.path.join(os.path.dirname(__file__), "data", "haryana_bus_stands.json")
+    if not os.path.exists(file_path):
+        file_path = os.path.join("data", "haryana_bus_stands.json")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            stands = json.load(f)
+            _bus_stands_cache["data"] = stands
+            _bus_stands_cache["timestamp"] = now
+            return stands
+    except Exception as e:
+        logger.error(f"Error loading haryana_bus_stands.json: {e}")
+        return _bus_stands_cache["data"] or []
+
+@app.get("/api/bus-stands")
+@limiter.limit("60/minute")
+async def list_bus_stands(request: Request):
+    stands = get_haryana_bus_stands()
+    return {
+        "count": len(stands),
+        "stands": stands
+    }
+
+@app.get("/api/bus-stands/search")
+@limiter.limit("60/minute")
+async def search_bus_stands(request: Request, q: str = Query("", min_length=1, max_length=50)):
+    stands = get_haryana_bus_stands()
+    query = q.strip().lower()
+    if not query:
+        return {"query": q, "count": 0, "results": []}
+
+    prefix_name = []
+    prefix_alias = []
+    substring_match = []
+
+    for s in stands:
+        name_lower = s.get("name", "").lower()
+        district_lower = s.get("district", "").lower()
+        aliases_lower = [a.lower() for a in s.get("aliases", [])]
+
+        if name_lower.startswith(query):
+            prefix_name.append(s)
+        elif any(a.startswith(query) for a in aliases_lower):
+            prefix_alias.append(s)
+        elif (query in name_lower or any(query in a for a in aliases_lower) or query in district_lower):
+            substring_match.append(s)
+
+    combined = prefix_name + prefix_alias + substring_match
+    seen = set()
+    ranked_results = []
+    for item in combined:
+        name = item.get("name")
+        if name not in seen:
+            seen.add(name)
+            ranked_results.append(item)
+            if len(ranked_results) >= 20:
+                break
+
+    return {
+        "query": q,
+        "count": len(ranked_results),
+        "results": ranked_results
     }
 
 # Routes Retrieval & Management Endpoints
